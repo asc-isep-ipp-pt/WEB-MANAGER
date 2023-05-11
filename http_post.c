@@ -11,16 +11,41 @@
 #include "http.h"
 #include "http_post.h"
 
+
+
+
 void processPOST(int sock, char *request, char *baseFolder) {
 	char *aux, line[1000];
-        char uri[1000];
-	int content_len;
+        char uri[1000], content_type[60];
+	int i, content_len;
+
+	content_len=0;
+	*content_type=0;
 
         do {    // read the remaining header lines
                 readLineCRLF(sock,line);
-		if(!strncmp(line,HTTP_CONTENT_LENGTH, strlen(HTTP_CONTENT_LENGTH))) content_len=atoi(line+strlen(HTTP_CONTENT_LENGTH));
+		puts(line);
+		if(!strncasecmp(line,HTTP_CONTENT_LENGTH, strlen(HTTP_CONTENT_LENGTH))) content_len=atoi(line+strlen(HTTP_CONTENT_LENGTH));
+		if(!strncasecmp(line,HTTP_CONTENT_TYPE, strlen(HTTP_CONTENT_TYPE))) strcpy(content_type, line+strlen(HTTP_CONTENT_TYPE));
                 }
         while(*line);
+
+	if(!content_len) { puts("Fatal error: empty POST request"); return; }
+
+	printf("Content type is %s\n",content_type);
+
+	while(content_len) { // read the content
+		i=read(sock,line,1000);
+		if(i<0) { puts("Fatal error: error reading POST data"); return; }
+		write(1,line,i);
+		content_len-=i;
+		}
+	//			secret=ola&action=list&object=&object2=&cwd=
+
+
+	sendHttpStringResponse(sock, "200 Ok", "text/html", "OK");
+
+	}
 
 
 	/// TODO
@@ -29,9 +54,9 @@ void processPOST(int sock, char *request, char *baseFolder) {
 
 
 
-	if(!strncmp(request+5,"/upload",7)) processPOSTupload(sock, baseFolder);
-	else processPOSTlist(sock, baseFolder);
-	}
+	//if(!strncmp(request+5,"/upload",7)) processPOSTupload(sock, baseFolder);
+	//else processPOSTlist(sock, baseFolder);
+	//}
 
 
 void processPOSTupload(int sock, char *baseFolder) {

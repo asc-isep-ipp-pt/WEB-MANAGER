@@ -5,6 +5,10 @@
 
 #define HTTP_CONNECTION_CLOSE "Connection: close"
 #define HTTP_CONTENT_LENGTH "Content-Length: "
+#define HTTP_CONTENT_TYPE "Content-Type: "
+
+#define HTTP_CONTENT_TYPE_FORM_URLENCODED "application/x-www-form-urlencoded"
+
 
 
 void readLineCRLF(int sock, char *line);

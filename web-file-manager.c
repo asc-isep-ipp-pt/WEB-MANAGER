@@ -16,9 +16,10 @@
 
 int main(int argc, char **argv) {
 	struct sockaddr_storage from;
-	int err, newSock, sock;
+	int err, Nsock, sock;
 	socklen_t adl;
 	struct addrinfo  req, *list;
+	char line[2500];
 
 	if(argc!=5) {puts("Sorry, the mandatory command line arguments are: server-port-number access-secret root-folder initial-folder"); exit(1);}
 	access_secret=argv[2];
@@ -28,9 +29,8 @@ int main(int argc, char **argv) {
 	// ALL ARGUMENTS ARE MANDATORY
 	//
 
-
 	bzero((char *)&req,sizeof(req));
-	req.ai_family = AF_INET6;       // requesting a IPv6 local address will allow both IPv4 and IPv6 clients to use it
+	req.ai_family = AF_INET6;       // requesting an IPv6 local address will allow both IPv4 and IPv6 clients to connect
 	req.ai_socktype = SOCK_STREAM;
 	req.ai_flags = AI_PASSIVE;      // local address
 
@@ -42,6 +42,9 @@ int main(int argc, char **argv) {
 	if(sock==-1) {
         	perror("Failed to open local socket"); freeaddrinfo(list); exit(1);}
 
+	err=1;
+	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &err, sizeof(int)) == -1) { perror("Failed to set SO_REUSEADDR"); close(sock); exit(1); }
+
 	if(bind(sock,(struct sockaddr *)list->ai_addr, list->ai_addrlen)==-1) {
         	perror("Bind failed");close(sock);freeaddrinfo(list);exit(1);}
 
@@ -51,37 +54,28 @@ int main(int argc, char **argv) {
 
 	listen(sock,SOMAXCONN);
 	adl=sizeof(from);
-	for(;;) {
-        	newSock=accept(sock,(struct sockaddr *)&from,&adl); // WAIT FOR CLIENT CONNECTION
+	for(;;)	{
+        	Nsock=accept(sock,(struct sockaddr *)&from,&adl); // WAIT FOR CLIENT CONNECTION
         	if(!fork()) {
                 	close(sock);
-			processHttpRequest(newSock);
-                	close(newSock);
+			readLineCRLF(Nsock,line); // read the request line
+			// printf("Request line: %s\n", line);
+			if(!strncmp(line,"GET /",5)) processGET(Nsock,line);
+			else
+			if(!strncmp(line,"POST /",6)) processPOST(Nsock, line, BASE_FOLDER);
+			else {
+				sprintf(line,"%s<body bgcolor=yellow><h1>HTTP method not supported</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "405 Method Not Allowed", "text/html", line);
+				puts("Oops, the method is not supported by this server");
+			}
+                	close(Nsock);
                 	exit(0);
                 	}
-        	close(newSock);
+        	close(Nsock);
         	}
 	close(sock);
 	}
 
-
-void processGET(int sock, char *requestLine); // declared ahead
-
-void processHttpRequest(int sock) {
-	char line[500];
-
-	readLineCRLF(sock,line); // read the request line
-	// printf("Request: %s\n", line);
-	if(!strncmp(line,"GET /",5)) processGET(sock,line);
-	else
-	if(!strncmp(line,"POST /",6)) processPOST(sock, line, BASE_FOLDER);
-	else {
-		sprintf(line,"%s<body bgcolor=yellow><h1>HTTP method not supported</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
-		sendHttpStringResponse(sock, "405 Method Not Allowed", "text/html", line);
-		puts("Oops, the method is not supported by this server");
-		}
-
-	}
 
 // Only the first request is a GET, following requests are POSTs
 // If the access secret is ok, the GET is redirected to a POST
@@ -104,7 +98,9 @@ void processGET(int sock, char *requestLine) {
 		puts("Oops, not authorized.");
 		}
 	else	{
-		sprintf(line,"%s<body bgcolor=gray onLoad=\"act('list','','')\"><form name=main method=POST action=/ <input type=hidden name=secret value=\"%s\"><input type=hidden name=action value=list><input type=hidden name=object value=><input type=hidden name=object2 value=><input type=hidden name=cwd value=></form>%s",HTML_HEADER,access_secret,HTML_BODY_FOOTER);
+		sprintf(line,"%s<body bgcolor=gray onLoad=\"act('list','','')\"> \
+				<form name=main method=POST action=/><input type=hidden name=secret value=\"%s\"><input type=hidden name=action value=list><input type=hidden name=object value=> \
+				<input type=hidden name=object2 value=><input type=hidden name=cwd value=></form>%s",HTML_HEADER,access_secret,HTML_BODY_FOOTER);
 
 
 
