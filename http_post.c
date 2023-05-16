@@ -10,21 +10,21 @@
 
 #include "http.h"
 #include "http_post.h"
+#include "web-manager.h"
 
 
 
 
-void processPOST(int sock, char *request, char *baseFolder) {
-	char *aux, line[1000];
-        char uri[1000], content_type[60];
-	int i, content_len;
+void processPOST(int sock, char *request_line, char *access_secret, char *root_folder, char *default_CWD) {
+	char line[1000], content_type[60];
+	int content_len;
 
 	content_len=0;
 	*content_type=0;
 
         do {    // read the remaining header lines
                 readLineCRLF(sock,line);
-		puts(line);
+		//puts(line);
 		if(!strncasecmp(line,HTTP_CONTENT_LENGTH, strlen(HTTP_CONTENT_LENGTH))) content_len=atoi(line+strlen(HTTP_CONTENT_LENGTH));
 		if(!strncasecmp(line,HTTP_CONTENT_TYPE, strlen(HTTP_CONTENT_TYPE))) strcpy(content_type, line+strlen(HTTP_CONTENT_TYPE));
                 }
@@ -34,12 +34,113 @@ void processPOST(int sock, char *request, char *baseFolder) {
 
 	printf("Content type is %s\n",content_type);
 
-	while(content_len) { // read the content
-		i=read(sock,line,1000);
-		if(i<0) { puts("Fatal error: error reading POST data"); return; }
-		write(1,line,i);
-		content_len-=i;
+	//if(!strcasecmp(content_type,HTTP_CONTENT_TYPE_FORM_URLENCODED)) {
+	if(!strcasecmp(content_type,"text/plain")) {
+		// read the entire content to memory
+		int i, todo;
+		char *aux, *aux1, *content;
+
+		todo=content_len;
+		content=malloc(content_len);
+		if(!content) { puts("Fatal error allocating memory for POST data"); return; }
+		aux=content;
+		while(todo) {
+			i=read(sock,aux,todo);
+			if(i<0) { puts("Fatal error: error reading POST data"); free(content); return; }
+			aux+=i; todo-=i;
+			}
+		content[content_len]=0;
+
+		puts(content);
+
+		/////////////////////////////////////// check the secret
+		aux=strstr(content,"secret=");
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
+
+		aux1=line; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+		
+		if(strcmp(line,access_secret)) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+							sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
+
+		/////////////////////////////////////// get the action
+		aux=strstr(content,"action=");
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
+
+		char action[100];
+		aux1=action; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+
+
+		/////////////////////////////////////// get the cwd
+		aux=strstr(content,"cwd=");
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
+
+		char cwd[200];
+		aux1=cwd; aux+=4; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+
+		if(!*cwd) strcpy(cwd, default_CWD);
+
+		//////////////////////////////////////////////
+
+		if(!strcmp(action,"list")) { free(content); sendListResponse(sock, access_secret, root_folder, cwd); return; }
+
+		/////////////////////////////////////// get the object
+		aux=strstr(content,"object=");
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
+
+		char object[200];
+		aux1=object; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+
+		////////////////////////////////////////////// CD
+
+		if(!strcmp(action,"cd")) { free(content); 
+
+			if(*object=='/') strcpy(line,object);
+			else
+			if(!strcmp(object,"..")) { strcpy(line,cwd); aux=line+strlen(line)-1; while(*aux!='/') aux--; if(aux==line) aux++; *aux=0; }
+			else
+			if(!strcmp(object,".")) strcpy(line,cwd); 
+			else
+				{ strcpy(line,cwd); aux=line; while(*aux) aux++; aux--; if(*aux=='/') strcat(line,object); else sprintf(line,"%s/%s",cwd,object); }
+
+			// block if things end up out of the root folder
+			if(strncmp(line,root_folder,strlen(root_folder))) strcpy(line,cwd);
+
+			sendListResponse(sock, access_secret, root_folder, line); return; }
+
+		////////////////////////////////////////////// CD
+
+		if(!strcmp(action,"mkdir")) { free(content); 
+
+
+			sendListResponse(sock, access_secret, root_folder, line); return; }
+
+
+		/////////////////////////////////////// get the object2
+		aux=strstr(content,"object2=");
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
+
+		char object2[200];
+		aux1=object2; aux+=8; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+
+
+		////////////////////
+
+		puts(action);
+		puts(object);
+		puts(object2);
+		puts(cwd);
+
+
+		free(content);
 		}
+
+
+
 	//			secret=ola&action=list&object=&object2=&cwd=
 
 
@@ -57,6 +158,60 @@ void processPOST(int sock, char *request, char *baseFolder) {
 	//if(!strncmp(request+5,"/upload",7)) processPOSTupload(sock, baseFolder);
 	//else processPOSTlist(sock, baseFolder);
 	//}
+	//
+	//
+	//
+	//
+
+
+
+
+
+void sendListResponse(int sock, char *access_secret, char *root_folder, char *cwd) {
+	char list[50000];
+	DIR *d;
+	struct dirent *e;
+
+	d=opendir(cwd);
+	printf("Listing folder %s\n",cwd);
+	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory for listing.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+			           sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
+
+
+	sprintf(list,"%s<body bgcolor=gray> \
+		       <form name=main method=POST action=/ enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
+		       <input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
+		       <table width=100%% border=0 cellspacing=3><tr> \
+		       <td align=center valign=middle bgcolor=#B0C0B0><b>Create object</b><p>Name: <input id=objname type=text name=objname> \
+		       <p><input type=button value=\"Create Folder\" onclick=\"act('mkdir',document.getElementById('objname').value,'');\"> \
+		       <input type=button value=\"Create Empty File\" onclick=\"act('mkfile',document.getElementById('objname').value,'');\"></td> \
+		       </tr></table> \
+		       <hr><h3>%s</h3><ul>",HTML_HEADER,access_secret,cwd,cwd);
+
+
+
+
+	do {
+		e=readdir(d);
+		if(!e) break;
+		if(e->d_type==DT_DIR) { strcat(list,"<li><a href=\"javascript:act('cd','"); strcat(list,e->d_name); strcat(list,"','');\"><b>");
+			strcat(list,e->d_name);strcat(list,"/</b></a></li>");}
+		else { strcat(list,"<li><b>"); strcat(list,e->d_name); strcat(list,"</b></li>");}
+
+		}
+	while(e);
+	closedir(d);
+	strcat(list,"</ul>");
+	strcat(list,HTML_BODY_FOOTER);
+	sendHttpStringResponse(sock, "200 Ok", "text/html", list);
+	puts("Sent list response");
+	return;
+	}
+
+
+
+
+
 
 
 void processPOSTupload(int sock, char *baseFolder) {
@@ -89,14 +244,14 @@ void processPOSTupload(int sock, char *baseFolder) {
         	}
 	while(*line);
 
-	if(!*separator)
-		replyPostError(sock, "Content-Type: multipart/form-data; expected and not found");
-	if(!len)
-		replyPostError(sock, "Content-Length: expected and not found");
+//	if(!*separator)
+//		replyPostError(sock, "Content-Type: multipart/form-data; expected and not found");
+//	if(!len)
+//		replyPostError(sock, "Content-Length: expected and not found");
 
 	readLineCRLF(sock,line); // SEPARATOR
-	if(strcmp(line+2,separator))
-		replyPostError(sock, "Multipart separator expected and not found");
+	//if(strcmp(line+2,separator))
+	//	replyPostError(sock, "Multipart separator expected and not found");
 	len=len-strlen(line)-2;
 
 	do {	// SECOND HEADER
@@ -112,14 +267,14 @@ void processPOSTupload(int sock, char *baseFolder) {
 		do {  				// READ THE CONTENT
 			done=read(sock,line,200); len=len-done; }
 		while(len>0);
-		replyPostError(sock, "Content-Disposition: form-data; expected and not found (NO FILENAME)");
+	//	replyPostError(sock, "Content-Disposition: form-data; expected and not found (NO FILENAME)");
 		}
 
 	strcpy(filePath,baseFolder); strcat(filePath,"/"); strcat(filePath,filename);
 	f=fopen(filePath,"w+");
 	if(!f) {
 		sprintf(line, "Failed to create %s file\n",filePath);
-		replyPostError(sock, line);
+	//	replyPostError(sock, line);
 		}
 
 	// SUBTRACT THE SEPARATOR LENGHT, PLUS -- ON START PLUS -- ON END PLUS CRLF
@@ -134,51 +289,9 @@ void processPOSTupload(int sock, char *baseFolder) {
 	while(len>0);
 	readLineCRLF(sock,line);
 	fclose(f);
-	replyPostList(sock, baseFolder);
+	//replyPostList(sock, baseFolder);
 	}
 
 
 
 
-void processPOSTlist(int sock, char *baseFolder) {
-	char line[200];
-	do		// READ (AND IGNORE) THE HEADER
-        	{
-        	readLineCRLF(sock,line);
-        	}
-	while(*line);
-	replyPostList(sock, baseFolder);
-	}
-
-void replyPostList(int sock, char *baseFolder) {
-	char *s1="<html><head><title>File List</title></head><body><h1>File List:</h1><big><ul>";
-	char *s2="</ul></big><hr><p><a href=/>BACK</a></body></html>";
-	char list[1000];
-	DIR *d;
-	struct dirent *e;
-
-	d=opendir ("www/");
-	if(!d) replyPostError(sock,"Failed to open directory for listing");
-	strcpy(list,s1);
-	do {
-		e=readdir(d);  // IGNORE FILENAMES STARTED BY A DOT
-		if(e && *e->d_name!='.') {strcat(list,"<li><a href=/");strcat(list,e->d_name);
-			strcat(list,"><b>");strcat(list,e->d_name);strcat(list,"</b></a>");}
-		}
-	while(e);
-	closedir(d);
-	strcat(list,s2);
-	sendHttpStringResponse(sock, "200 Ok", "text/html", list);
-	close(sock);exit(0);
-	}
-
-void replyPostError(int sock, char *error) {
-	char *s1="<html><head><title>Server Error</title></head><body><center><img src=500.png><br>(500.png)</center><h1>Server error on POST</h1><p>ERROR: ";
-	char *s2="<hr><p><a href=/>BACK</a></body></html>";
-	char line[300];
-
-	strcpy(line,s1); strcat(line,error); strcat(line,s2);
-	sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", line);
-	close(sock);
-	exit(1);
-	}

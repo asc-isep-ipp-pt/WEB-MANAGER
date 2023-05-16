@@ -1,6 +1,6 @@
 CC=gcc
 
-P=web-file-manager
+P=web-manager
 
 all: $(P) http.o http_post.o
 
