@@ -9,6 +9,8 @@
 
 #define HTTP_CONTENT_TYPE_FORM_URLENCODED "application/x-www-form-urlencoded"
 
+#define HTTP_CONTENT_TYPE_TEXT_HTML "text/html"
+
 
 
 void readLineCRLF(int sock, char *line);
