@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -88,6 +89,9 @@ int main(int argc, char **argv) {
 	if(!access("/usr/bin/wget",X_OK)) wget_command="/usr/bin/wget";
 	if(!wget_command && !access("/bin/wget",X_OK)) wget_command="/bin/wget";
 	if(!wget_command && !access("/usr/local/bin/wget",X_OK)) wget_command="/usr/local/bin/wget";
+
+	// create the clipboard folder
+	mkdir(clipboard_folder,0700);
 
 
 

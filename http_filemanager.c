@@ -123,11 +123,27 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		////////////////////////////////////////////// CDUP
 
 		if(!strcmp(action,"cdup")) { free(content); 
+			if(strcmp(root_folder,cwd)) {
 			strcpy(line,cwd); aux=line+strlen(line)-1; while(*aux!='/') aux--; if(aux==line) aux++; *aux=0;
-
+			}
 			sendListResponse(sock, line); return; }
 
-		/////////////////////////////////////// get the object
+		////////////////////////////////////////////// DELETE CLIPBOARD
+
+		if(!strcmp(action,"deleteclip")) { free(content); 
+			sprintf(line,"rm -Rf %s/*",clipboard_folder);
+			system(line);
+			sendListResponse(sock, cwd); return; }
+
+		////////////////////////////////////////////// PASTE FROM CLIPBOARD
+
+		if(!strcmp(action,"pasteclip")) { free(content); 
+			sprintf(line,"cp -Rf %s/* %s/",clipboard_folder,cwd);
+			system(line);
+			sendListResponse(sock, cwd); return; }
+
+	
+		/////////////////////////////////////// Get the object value
 		aux=strstr(content,"object=");
 		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
@@ -136,20 +152,23 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		aux1=object; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 
 
+		/// If object not provided don't do anything bellow this and return the list
+		if(!*object) { free(content); sendListResponse(sock, cwd); return; }
+
+
+
+
 		////////////////////////////////////////////// DOWNLOAD A FILE TO THE SERVER (wget)
 
 		if(!strcmp(action,"wget")) { free(content); 
-
 			sprintf(line,"%s -N -P \"%s\" \"%s\"",wget_command,cwd,object);
-			puts(line);
 			system(line);
 			sendListResponse(sock, cwd); return; }
 
 
-		////////////////// for other commands / is not allowed in the object name
-		//
+		////////////////// for other commands the slash is not allowed in the object name
+		
 		aux=object; while(*aux>31 && *aux!='/') aux++; *aux=0;
-
 
 
 		////////////////////////////////////////////// CD
@@ -191,6 +210,15 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 			sendHttpFileDownloadResponse(sock, cwd, object); return; }
 
+		////////////////////////////////////////////// COPY TO CLIPBOARD
+
+		if(!strcmp(action,"copytoclip")) { free(content); 
+
+			sprintf(line,"rm -Rf %s/*",clipboard_folder);
+			system(line);
+			sprintf(line,"cp -R \"%s/%s\" %s/",cwd,object,clipboard_folder);
+			system(line);
+			sendListResponse(sock, cwd); return; }
 
 
 
@@ -200,8 +228,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 
 
-
-
+		// TODO
 		////////////////////////////////////////////// DETAILS
 
 		if(!strcmp(action,"details")) { free(content); 
@@ -223,6 +250,34 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		char object2[200];
 		aux1=object2; aux+=8; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+
+
+		/// If object2 not provided don't do anything bellow this and return the list
+		if(!*object2) { free(content); sendListResponse(sock, cwd); return; }
+
+
+
+		////////////////////////////////////////////// RENAME
+
+		if(!strcmp(action,"rename")) { free(content); 
+			if(strcmp(object,object2)) {
+				sprintf(line,"mv \"%s/%s\" \"%s/%s\"",cwd,object,cwd,object2);
+				system(line);
+			}
+			sendListResponse(sock, cwd); return; }
+
+		////////////////////////////////////////////// CLONE
+
+		if(!strcmp(action,"clone")) { free(content); 
+			if(strcmp(object,object2)) {
+				sprintf(line,"cp -R \"%s/%s\" \"%s/%s\"",cwd,object,cwd,object2);
+				system(line);
+			}
+			sendListResponse(sock, cwd); return; }
+
+
+
+
 
 
 		////////////////////
@@ -281,14 +336,10 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 /// the list response also contains several general options, e.g, create 
 
 void sendListResponse(int sock, char *cwd) {
-	char list[50000];
+	char list[500000], *aux;
 	DIR *d;
 	struct dirent *e;
 
-	d=opendir(cwd);
-	printf("Listing folder %s\n",cwd);
-	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",HTML_HEADER,cwd,HTML_BODY_FOOTER);
-			           sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
 
 
 	sprintf(list,"%s<body bgcolor=gray> \
@@ -296,59 +347,125 @@ void sendListResponse(int sock, char *cwd) {
 		       <input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
 		       <p><font size=6>&nbsp; &nbsp; Current folder: <b>%s</b></font> \
 		       <p><table width=100%% border=0 cellspacing=3><tr> \
-		       <td align=center valign=middle style=\"width:250px\"><details><summary>Create object</summary><p><input id=objname type=text name=objname> \
-		       <p><input type=button value=\"Create Folder\" onclick=\"act('mkdir',document.getElementById('objname').value,'');\"> \
-		       <input type=button value=\"Create File\" onclick=\"act('mkfile',document.getElementById('objname').value,'');\"></p></details</td> \
+		       <td align=center valign=top style=\"width:250px\"><details><summary>CREATE</summary><p><input id=mkobjname type=text> \
+		       <p><input type=button value=\"FOLDER\" onclick=\"act('mkdir',document.getElementById('mkobjname').value,'');\"> \
+		       <input type=button value=\" FILE \" onclick=\"act('mkfile',document.getElementById('mkobjname').value,'');\"></p></details</td> \
 		       <td></td>",HTML_HEADER,access_secret,cwd,cwd);
 
 	if(wget_command) {
-		strcat(list,"<td align=center valign=middle style=\"width:300px\"><details><summary>Download file from URL (wget)</summary><p><input id=urlwget type=text name=urlwget>");
-		strcat(list,"<p><input type=button value=\"Download\" onclick=\"act('wget',document.getElementById('urlwget').value,'');\"></p></details></td>");
+		strcat(list,"<td align=center valign=top style=\"width:300px\"><details><summary>Upload file from URL (wget)</summary><p><input id=urlwget type=text name=urlwget> \
+			<p><input type=button value=\"DOWNLOAD\" onclick=\"act('wget',document.getElementById('urlwget').value,'');\"></p></details></td>");
 	}
 
 
 
-	strcat(list,"</tr></table></p><hr>");
+	// TODO: The Clipboard
+	
+	char clipboardContent[200];
+	d=opendir(clipboard_folder);
+	e=readdir(d);
+	while(e) {
+		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) break;
+		e=readdir(d);
+	}
+
+	if(e) { strcpy(clipboardContent,e->d_name); if(e->d_type==DT_DIR) strcat(clipboardContent,"/"); }
+	else *clipboardContent=0;
+	closedir(d);
+
+	aux=list+strlen(list);
+	if(*clipboardContent) {
+		sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>CLIPBOARD (*)</summary><p>%s",clipboardContent);
+		strcat(aux,"</p><p><input type=button value=\"PASTE\" onclick=\"act('pasteclip','','');\">&nbsp;<input type=button value=\"DELETE\" onclick=\"act('deleteclip','','');\"></p></details></td>");
+	}
+	else {
+		sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>CLIPBOARD</summary><p></p></details></td>");
+	}
 
 
+
+
+
+	strcat(aux,"</tr></table></p><hr>");
+	aux=aux+strlen(aux);
+
+	// Add to the list the current folder listing contents
+	d=opendir(cwd);
+	printf("Listing folder %s\n",cwd);
+	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",HTML_HEADER,cwd,HTML_BODY_FOOTER);
+			           sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
 	
 	// add ../ for cdup
-	if(strcmp(cwd,root_folder)) strcat(list,"<p><a href=\"javascript:act('cdup','','');\"><b>..</b><i>(parent folder)</i></a></li>");
+	if(strcmp(cwd,root_folder)) strcat(aux,"<p><a href=\"javascript:act('cdup','','');\"><b>..</b><i>(parent folder)</i></a></li>");
 
+	int elem=0;  // used to grant unique html IDs
 	do {
 		e=readdir(d);
 		if(!e) break;
 		// use the details tag
 		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
-			strcat(list,"<p><details><summary>&nbsp;&nbsp;&nbsp;&nbsp;");
-			if(e->d_type==DT_DIR) { strcat(list,"<a href=\"javascript:act('cd','"); strcat(list,e->d_name); strcat(list,"','');\"><b>");
-				strcat(list,e->d_name);strcat(list,"/</b></a>");}
-			else { strcat(list,"<b>"); strcat(list,e->d_name); strcat(list,"</b>");}
-			strcat(list,"</summary><p><table width=100%% border=0 cellspacing=3><tr>");
+			elem++;
 
-			// Manage
-			strcat(list,"<td align=center valign=middle style=\"width:250px\"><input type=button value=\"Manage Object\" onClick=\"javascript:act('details','");
-			strcat(list,e->d_name); strcat(list,"','');\"></td>");
-
-			// download file
-			if(e->d_type==DT_REG) { strcat(list,"<td align=center valign=middle style=\"width:250px\"><input type=button value=\"Download\" onClick=\"javascript:act('download','");
-				strcat(list,e->d_name); strcat(list,"','');\"></td>"); }
-
-			// DELETE
-			strcat(list,"<td align=center valign=middle style=\"width:250px\"><details><summary>DELETE</summary><p>");
-			if(e->d_type==DT_DIR) strcat(list,"<input type=button value=\"Confirm Remove Folder and Contents\" onClick=\"javascript:act('rm','"); 
-			else strcat(list,"<input type=button value=\"Confirm Remove File\" onClick=\"javascript:act('rm','"); 
-			strcat(list,e->d_name); strcat(list,"','');\"></p></details></td>");
+			strcat(aux,"<p><details><summary>&nbsp;&nbsp;&nbsp;&nbsp;");
+			// if a folder, permit cd into it
+			aux=aux+strlen(aux);
+			if(e->d_type==DT_DIR) sprintf(aux,"<a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>",e->d_name,e->d_name);
+			else sprintf(aux,"<b>%s</b>",e->d_name);
+			strcat(aux,"</summary><p><table width=100%% border=0 cellspacing=3><tr>");
 
 
-			strcat(list,"</tr></table><hr></p></details>");
+			// Manage ???
+			strcat(aux,"<td align=center valign=top style=\"width:250px\"><input type=button value=\"Manage Object\" onClick=\"javascript:act('details','");
+			strcat(aux,e->d_name); strcat(aux,"','');\"></td>");
+
+
+
+			// if a regular file, add the option of downloading the file
+			aux=aux+strlen(aux);
+			if(e->d_type==DT_REG) sprintf(aux,"<td align=center valign=top style=\"width:250px\"><input type=button value=\"Download\" onClick=\"javascript:act('download','%s','');\"></td>",
+					e->d_name);
+
+			// RENAME or CLONE 
+			aux=aux+strlen(aux);
+			sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>RENAME/CLONE</summary> \
+		       		<p><input id=ren%i type=text value=\"%s\"> \
+				<p><input type=button value=Rename onclick=\"act('rename','%s',document.getElementById('ren%i').value);\"> \
+		       		<input type=button value=Clone onclick=\"act('clone','%s',document.getElementById('ren%i').value);\"></p></details</td>",
+				elem, e->d_name, e->d_name, elem, e->d_name, elem);
+
+			// DELETE 
+			strcat(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>DELETE</summary><p>");
+			aux=aux+strlen(aux);
+			if(e->d_type==DT_DIR) sprintf(aux,"<input type=button value=\"Confirm Remove Folder and Contents\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",e->d_name); 
+			else sprintf(aux,"<input type=button value=\"Confirm Remove File\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",e->d_name); 
+
+
+			// COPY TO CLIPBOARD (TODO)
+			aux=aux+strlen(aux);
+			if(!*clipboardContent) sprintf(aux,"<td align=center valign=top style=\"width:250px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",
+					e->d_name);
+			else
+				sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>COPY to CLIPBOARD</summary><p> \
+						<input type=button value=\"Confirm Overwrite Clipboard\" onClick=\"javascript:act('copytoclip','%s','');\"></p></details></td>",e->d_name);
+
+
+
+
+			// TODO:
+
+
+			
+			// Edit textfile (TODO)
+
+
+
+			strcat(aux,"</tr></table><hr></p></details>");
 			}
 
 		}
 	while(e);
 	closedir(d);
-	strcat(list,"</ul>");
-	strcat(list,HTML_BODY_FOOTER);
+	strcat(aux,HTML_BODY_FOOTER);
 	sendHttpStringResponse(sock, "200 Ok", "text/html", list);
 	return;
 	}
