@@ -14,7 +14,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj);
 
 void sendHttpFileDownloadResponse(int sock, char *cwd, char *obj);
 
-void replyPostError(int sock, char *error);
+void processMultipartPost(int sock, long content_len, char *boundary);
 
 
 

@@ -107,9 +107,9 @@ int main(int argc, char **argv) {
 			else
 			if(!strncmp(line,"POST /filemanager",17)) processPOSTfilemanager(Nsock, line);
 			else {
+				printf("Request line not supported by this server: %s\n",line);
 				sprintf(line,"%s<body bgcolor=yellow><h1>HTTP method not supported</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "405 Method Not Allowed", "text/html", line);
-				puts("Oops, the method is not supported by this server");
 			}
                 	close(Nsock);
                 	exit(0);

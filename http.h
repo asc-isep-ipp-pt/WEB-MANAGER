@@ -19,7 +19,8 @@ void writeLineCRLF(int sock, char *line);
 void sendHttpResponseHeader(int sock, char *status, char *contentType, int contentLength);
 int sendHttpResponse(int sock, char *status, char *contentType, char *content, int contentLength);
 void sendHttpStringResponse(int sock, char *status, char *contentType, char *content);
-void sendHttpFileResponse(int sock, char *status, char *filename);
+//void sendHttpFileResponse(int sock, char *status, char *filename);
+void sendHttpFileContent(int sock, FILE *file, char *status, char *contentType);
 
 
 #endif

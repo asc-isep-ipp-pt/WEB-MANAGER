@@ -59,7 +59,22 @@ void sendHttpStringResponse(int sock, char *status, char *contentType, char *con
 
 
 
+void sendHttpFileContent(int sock, FILE *f, char *status, char *contentType) {
+	long len;
+	int done;
+	char line[200];
+	
+	fseek(f,0,SEEK_END);
+	len=ftell(f);
+	sendHttpResponseHeader(sock, status, contentType, len);
 
+	rewind(f);
+	do {
+		done=fread(line,1,200,f);
+		if(done>0) write(sock,line,done);
+		}
+	while(done>=0);
+	}
 
 
 
