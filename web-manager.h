@@ -21,8 +21,10 @@ void processGET(int sock, char *requestLine);
 char *wget_command=NULL;
 char *root_folder="/";
 char *default_cwd="/";
+char *secret_file="/.web-manager.secret";
+int min_secret_len=3;
 char *access_secret=NULL;
-char *port_number="2226";
+char *port_number="2229";
 char *clipboard_folder="/tmp/.web-manager-fileserver-clipboard";
 
 

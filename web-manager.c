@@ -15,7 +15,11 @@
 #include "web-manager.h"
 
 
-void usage_message(void) {puts("Mandatory command line options are:\n --secret SECRET-STRING-WITHOUT-BLANKS\nOptional command line options are:\n --root-folder FOLDER\n --initial-cwd FOLDER\n --port TCP-PORT-NUMBER");exit(1);}
+
+// TODO - read the secret from a file instead of passing it through the command line
+
+void usage_message(void) {printf("Possible command line options are:\n --secret-file FILE-WITH-SECRET-STRING (default is %s)\n --root-folder FOLDER (default is %s)\n --initial-cwd FOLDER (default is %s)\n --port TCP-PORT-NUMBER (default is %s)\n\n",
+		secret_file,root_folder,default_cwd,port_number);exit(1);}
 
 
 int main(int argc, char **argv) {
@@ -24,6 +28,8 @@ int main(int argc, char **argv) {
 	socklen_t adl;
 	struct addrinfo  req, *list;
 	char line[2500];
+	char new_secret[2500];
+	char *aux;
 
 	//
 	// ARGUMENTS: server-port-number access-secret root-folder initial-fm-folder
@@ -34,9 +40,9 @@ int main(int argc, char **argv) {
 	c=1;
 	while(c<argc) {
 		if(!strcmp(argv[c],"--help")) usage_message();
-		if(!strcmp(argv[c],"--secret")) {
+		if(!strcmp(argv[c],"--secret-file")) {
 			c++; if(c>=argc) usage_message();
-			access_secret=argv[c];
+			secret_file=argv[c];
 		}
 		if(!strcmp(argv[c],"--root-folder")) {
 			c++; if(c>=argc) usage_message();
@@ -53,7 +59,17 @@ int main(int argc, char **argv) {
 		c++;
 		
 	}
-	if(!access_secret) usage_message();
+
+
+	FILE *f=fopen(secret_file,"r");
+	if (!f) { printf("Failed to read the access secret from file %s (failed to open)\n",secret_file); usage_message();}
+	if (!fgets(new_secret,2500,f)) { printf("Failed to read the access secret from file %s (failed to read)\n",secret_file); fclose(f); usage_message();}
+	fclose(f);
+	chmod(secret_file,S_IRUSR|S_IWUSR); // read and write for owner only
+	aux=new_secret; while(*aux>32) aux++; *aux=0;
+	if(strlen(new_secret)<min_secret_len) {printf("The secret length is bellow the minimum (%i)\n", min_secret_len); usage_message();}
+	access_secret=new_secret;
+
 	if(strncmp(root_folder,default_cwd,strlen(root_folder))) default_cwd=root_folder;
 	
 	

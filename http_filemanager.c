@@ -291,10 +291,10 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		////////////////////
 
-		puts(action);
+		/* puts(action);
 		puts(object);
 		puts(object2);
-		puts(cwd);
+		puts(cwd); */
 
 
 		free(content);
@@ -549,7 +549,7 @@ void sendListResponse(int sock, char *cwd) {
 			else sprintf(aux,"<input type=button value=\"Confirm Remove File\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",e->d_name); 
 
 
-			// COPY TO CLIPBOARD (TODO)
+			// COPY TO CLIPBOARD
 			aux=aux+strlen(aux);
 			if(!*clipboardContent) sprintf(aux,"<td align=center valign=top style=\"width:250px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",
 					e->d_name);
@@ -624,12 +624,6 @@ void sendHttpFileDownloadResponse(int sock, char *cwd, char *obj) {
 
 
 		////////////////////////////////////////////// UPLOAD FROM BROWSER (supports multiple files)
-		//
-		// TODO - work in progress
-		// The uploading of multiple files is ok and tested, however, on the browser's side a kind of a progress indicator is required.
-		//
-		//
-		
 
 void processMultipartPost(int sock, long content_len, char *bound) {
 	char buffer[8*B_SIZE];
@@ -715,109 +709,4 @@ void processMultipartPost(int sock, long content_len, char *bound) {
 	
 
 		
-
-
-
-
-/*	int i;
-	char line[1000];
-	FILE *f=fopen("upload.raw","w");
-
-	todo=content_len;
-	while(todo) {
-		if(todo>1000) i=read(sock,line,1000); else i=read(sock,line,todo);
-		if(i<0) { puts("Fatal error: error reading POST data"); return; }
-		fwrite(line,1,i,f);
-		todo-=i;
-		}
-	fclose(f);
-	sendHttpStringResponse(sock, "200 Ok", "text/html", "OK");
-*/
-
-
-
-
-
-
-		// OLD STUFF BELOW, TODO: remove this later on
-void processPOSTupload(int sock, char *baseFolder) {
-	char line[200];
-	char separator[100];
-	char filename[100];
-	char filePath[100];
-	int readNow,done,len;
-	char *cLen="Content-Length: ";
-	char *cTypeMP="Content-Type: multipart/form-data; boundary=";
-	char *cDisp="Content-Disposition: form-data; name=\"filename\"; filename=\"";
-	int cLenS=strlen(cLen);
-	int cTypeMPS=strlen(cTypeMP);
-	int cDispS=strlen(cDisp);
-	FILE *f;
-
-	*separator=0;
-	*filename=0;
-	len=0;
-
-	do {	// FIRST HEADER
-        	readLineCRLF(sock,line);
-		if(!strncmp(line,cLen,cLenS)) {
-			len=atoi(line+cLenS);
-			}		
-		else
-			if(!strncmp(line,cTypeMP,cTypeMPS)) {
-			strcpy(separator,line+cTypeMPS);
-			}
-        	}
-	while(*line);
-
-//	if(!*separator)
-//		replyPostError(sock, "Content-Type: multipart/form-data; expected and not found");
-//	if(!len)
-//		replyPostError(sock, "Content-Length: expected and not found");
-
-	readLineCRLF(sock,line); // SEPARATOR
-	//if(strcmp(line+2,separator))
-	//	replyPostError(sock, "Multipart separator expected and not found");
-	len=len-strlen(line)-2;
-
-	do {	// SECOND HEADER
-		readLineCRLF(sock,line);
-		len=len-strlen(line)-2;
-		if(!strncmp(line,cDisp,cDispS)) {
-			strcpy(filename,line+cDispS); filename[strlen(filename)-1]=0;
-			}
-		}
-	while(*line);
-
-	if(!*filename) {
-		do {  				// READ THE CONTENT
-			done=read(sock,line,200); len=len-done; }
-		while(len>0);
-	//	replyPostError(sock, "Content-Disposition: form-data; expected and not found (NO FILENAME)");
-		}
-
-	strcpy(filePath,baseFolder); strcat(filePath,"/"); strcat(filePath,filename);
-	f=fopen(filePath,"w+");
-	if(!f) {
-		sprintf(line, "Failed to create %s file\n",filePath);
-	//	replyPostError(sock, line);
-		}
-
-	// SUBTRACT THE SEPARATOR LENGHT, PLUS -- ON START PLUS -- ON END PLUS CRLF
-	len=len-strlen(separator)-6;
-
-	do { // FILE CONTENT
-		if(len>200) readNow=200; else readNow=len;
-		done=read(sock,line,readNow);
-		len=len-done;
-		if(done>0) fwrite(line,1,done,f);
-        	}	
-	while(len>0);
-	readLineCRLF(sock,line);
-	fclose(f);
-	//replyPostList(sock, baseFolder);
-	}
-
-
-
 
