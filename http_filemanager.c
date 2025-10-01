@@ -233,16 +233,11 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			sendListResponse(sock, cwd); return; }
 
 
-
-
-
 		////////////////////////////////////////////// DETAILS
 
 		if(!strcmp(action,"details")) { free(content); 
 
 			sendDetailsResponse(sock, cwd, object); return; }
-
-
 
 
 
@@ -436,13 +431,29 @@ void sendListResponse(int sock, char *cwd) {
 	}
 
 
-	// Upload file or files
+	// Upload files from browser
 	//
 	aux=list+strlen(list);
-	sprintf(aux,"<td align=center valign=top style=\"width:300px\" bgcolor=#cfcfcf><details><summary>Upload files from browser</summary><br><br> \
-			<form name=upload enctype=multipart/form-data method=POST action=/filemanager><input type=hidden name=secret value=\"%s\"><input type=hidden name=action value=upload> \
-			<input type=hidden name=cwd value=\"%s\"><input type=file name=filename multiple text=\"Select Files\"><br><input type=submit value=Upload></p></form></details></td>", access_secret, cwd);
-	
+
+	sprintf(aux,"<script> \
+			function uploadfiles() { \
+			document.getElementById(\"upF\").submit(); \
+			document.getElementById(\"msg\").innerHTML=\"<br><b><font color=green size=4>Uploading, please wait ...</font><br><br></b>\";  \
+			var visibility = 'hidden'; window.setInterval(function() { document.getElementById(\"msg\").style.visibility = visibility; \
+			visibility = (visibility === 'visible') ? 'hidden' : 'visible'; }, 300); } \
+			</script>");
+
+	aux=aux+strlen(aux);
+
+	// bgcolor=#cfcfcf
+
+	sprintf(aux,"<td align=center valign=top style=\"width:300px\"><details><summary>Upload files from browser</summary> \
+			<table width=90%% border=0><tr><td style=\"width:300px\" bgcolor=#cfcfcf align=center valign=center> \
+			<br><form name=upload enctype=multipart/form-data method=POST id=upF action=/filemanager><input type=hidden name=secret value=\"%s\"><input type=hidden name=action value=upload> \
+			<input type=hidden name=cwd value=\"%s\">&nbsp;<input type=file name=filename multiple onchange=uploadfiles()> \
+			</form><div id=msg></div></td></tr></table></details></td>", access_secret, cwd);
+
+
 	// The Clipboard
 	//
 	char clipboardContent[B_SIZE];
@@ -568,10 +579,7 @@ void sendListResponse(int sock, char *cwd) {
 	strcpy(list,HTML_BODY_FOOTER);
 	fwrite(list,1,strlen(list),tmpFile);
 	sendHttpFileContent(sock, tmpFile, "200 Ok", "text/html");
-	fclose(tmpFile);
-	//unlink(tmpFileName);
-
-	//sendHttpStringResponse(sock, "200 Ok", "text/html", list);
+	fclose(tmpFile); // this also removes the temporary file
 	return;
 }
 
@@ -615,9 +623,14 @@ void sendHttpFileDownloadResponse(int sock, char *cwd, char *obj) {
 
 
 
-		// TODO
-		////////////////////////////////////////////// UPLOAD FROM BROWSER
+		////////////////////////////////////////////// UPLOAD FROM BROWSER (supports multiple files)
 		//
+		// TODO - work in progress
+		// The uploading of multiple files is ok and tested, however, on the browser's side a kind of a progress indicator is required.
+		//
+		//
+		
+
 void processMultipartPost(int sock, long content_len, char *bound) {
 	char buffer[8*B_SIZE];
 	char cwd[B_SIZE], filename[B_SIZE], boundary[B_SIZE];
@@ -635,12 +648,12 @@ void processMultipartPost(int sock, long content_len, char *bound) {
 
 	while(todo) {
 		readLineCRLF(sock,buffer); todo=todo-2-strlen(buffer);
-		puts(buffer);
+		//puts(buffer);
 		if(strstr(buffer,"name=\"secret\"")) {
 			while(*buffer) { readLineCRLF(sock,buffer); todo=todo-2-strlen(buffer); }  // read lines until an empty line (end of the part's header)
 			readLineCRLF(sock,buffer); todo=todo-2-strlen(buffer);
 			if(strcmp(buffer,access_secret)) {
-				puts("Bad secret");
+				//puts("Bad secret");
 				sprintf(buffer,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", buffer); return;
 			}
@@ -686,7 +699,7 @@ void processMultipartPost(int sock, long content_len, char *bound) {
 							p=0; buffer[p]='\r';
 						}
 					}
-					if(p==boundaryLen) break;
+					if(p==boundaryLen) break; // it's the boundary sequence
 					fwrite(buffer,1,p+1,f);
 				}
 

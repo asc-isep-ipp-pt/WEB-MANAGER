@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
                 	close(sock);
 			readLineCRLF(Nsock,line); // read the request line
 			// printf("Request line: %s\n", line);
-			if(!strncmp(line,"GET /filemanager/",17)) processGETfilemanager(Nsock,line);
+			if(!strncmp(line,"GET /filemanager",16)) processGETfilemanager(Nsock,line);
 			else
 			if(!strncmp(line,"POST /filemanager",17)) processPOSTfilemanager(Nsock, line);
 			else {
