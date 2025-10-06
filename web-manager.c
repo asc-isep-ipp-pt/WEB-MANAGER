@@ -106,6 +106,12 @@ int main(int argc, char **argv) {
 	if(!wget_command && !access("/bin/wget",X_OK)) wget_command="/bin/wget";
 	if(!wget_command && !access("/usr/local/bin/wget",X_OK)) wget_command="/usr/local/bin/wget";
 
+	// check if the file command is available
+	if(!access("/usr/bin/file",X_OK)) file_command="/usr/bin/file";
+	if(!file_command && !access("/bin/file",X_OK)) file_command="/bin/file";
+	if(!file_command && !access("/usr/local/bin/file",X_OK)) file_command="/usr/local/bin/file";
+
+
 	// create the clipboard folder
 	mkdir(clipboard_folder,0700);
 
@@ -122,6 +128,8 @@ int main(int argc, char **argv) {
 			if(!strncmp(line,"GET /filemanager",16)) processGETfilemanager(Nsock,line);
 			else
 			if(!strncmp(line,"POST /filemanager",17)) processPOSTfilemanager(Nsock, line);
+			//else
+			//if(!strncmp(line,"POST /textFileEditor",20)) processPOSTtextFileEditor(Nsock, line);
 			else {
 				printf("Request line not supported by this server: %s\n",line);
 				sprintf(line,"%s<body bgcolor=yellow><h1>HTTP method not supported</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
