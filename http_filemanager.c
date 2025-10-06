@@ -8,6 +8,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <dirent.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include "http.h"
 #include "http_filemanager.h"
@@ -242,6 +244,13 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 
 
+
+
+
+
+
+
+
 		/////////////////////////////////////// get the object2
 		aux=strstr(content,"object2=");
 		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
@@ -282,10 +291,35 @@ void processPOSTfilemanager(int sock, char *request_line) {
 				sprintf(line,"ln -s \"%s/%s\" \"%s/%s\"",cwd,object,cwd,object2);
 				system(line);
 			}
-			sendListResponse(sock, cwd); return; }
+			sendListResponse(sock, cwd); return; 
+		}
 
 
+		////////////////////////////////////////////// CHOWN
 
+		if(!strcmp(action,"chown")) { free(content); 
+			sprintf(line,"chown -R %s \"%s/%s\"",object2,cwd,object);
+			system(line);
+			sendDetailsResponse(sock, cwd, object); return;
+		}
+
+
+		////////////////////////////////////////////// CHGRP
+
+		if(!strcmp(action,"chgrp")) { free(content); 
+			sprintf(line,"chgrp -R %s \"%s/%s\"",object2,cwd,object);
+			system(line);
+			sendDetailsResponse(sock, cwd, object); return;
+		}
+
+
+		////////////////////////////////////////////// CHMOD
+
+		if(!strcmp(action,"chmod")) { free(content); 
+			sprintf(line,"chmod -R %s \"%s/%s\"",object2,cwd,object);
+			system(line);
+			sendDetailsResponse(sock, cwd, object); return;
+		}
 
 
 
@@ -328,10 +362,18 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 /// SEND DETAILS / PROPERTIES RESPONSE
 ///////////// TODO
-		// TODO TODO TODO
 //
+
+
+
 void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	char list[500000], filename[200], *aux;
+	char commandLine[300];
+	char typeDesc[300];
+	int col, c, fileMaxContent=2000;
+	char isText, isFile;
+	unsigned char fileContent[fileMaxContent];
+	FILE *p;
 	struct stat sb;
 
 	if(strcmp(cwd,"/")) sprintf(filename,"%s/%s",cwd,obj); else sprintf(filename,"/%s",obj);
@@ -339,22 +381,34 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		<p><font size=6>&nbsp; &nbsp; <b>%s</b></font> \
+		<p><font size=7>&nbsp; &nbsp; <b>%s</b><br></font><font size=5>(%s)</font> \
 		<p><input type=button value=\" CANCEL \" onclick=\"act('list','','');\"></p><hr> \
-		",HTML_HEADER,access_secret,cwd,filename);
+		",HTML_HEADER,access_secret,cwd,obj,filename);
 
 	aux=list+strlen(list);
 
+
+
+	strcat(aux,"<table border=0 cellspacing=3 cellpadding=10<tr><td bgcolor=lightgray align=center><b>Object type and timestamp</b></td> \
+			<td bgcolor=lightgray align=center style=\"width:200px\"><b>User</b><br><small>(owner)</small></td><td bgcolor=lightgray align=center style=\"width:200px\"><b>Group</b></td> \
+			<td bgcolor=lightgray align=center style=\"width:200px\"><b>User permissions</b></td><td bgcolor=lightgray align=center style=\"width:200px\"><b>Group permissions</b></td> \
+			<td bgcolor=lightgray align=center style=\"width:200px\"><b>Others permissions</b></td> \
+			<td bgcolor=lightgray align=center style=\"width:200px\"><b>Special permissions</b></td></tr>");
+	aux=aux+strlen(aux);
+	
+	isFile=0;
 	if (lstat(filename, &sb) == -1) {
-		perror("stat");
+		perror("lstat() error");
+		strcat(aux,"<tr><td bgcolor=lightgray><font color=red>Sorry, the <i>lstat()</i> function returned an error.</font></td><td bgcolor=lightgray><font color=red>Sorry, the <i>lstat()</i> function returned an error.</font></td>");
+		aux=aux+strlen(aux);
 	} else {
-		strcat(aux,"<table border=0 cellspacing=10 cellpadding=10<tr><td bgcolor=lightgray>This object is a <b>");
+		strcat(aux,"<tr><td align=center bgcolor=lightgray>");
 		aux=aux+strlen(aux);
 		switch (sb.st_mode & S_IFMT) {
-			case S_IFBLK:	strcat(aux, "block device</b>");	break;
-			case S_IFCHR:	strcat(aux, "character device</b>");	break;
-			case S_IFDIR:	strcat(aux, "directory</b>");		break;
-			case S_IFIFO:	strcat(aux, "FIFO/Pipe</b>");		break;
+			case S_IFBLK:	strcat(aux, "Block device");	break;
+			case S_IFCHR:	strcat(aux, "Character device");	break;
+			case S_IFDIR:	strcat(aux, "Directory");		break;
+			case S_IFIFO:	strcat(aux, "FIFO/Pipe");		break;
 			case S_IFLNK:
 				char fullName[B_SIZE], linkTarget[B_SIZE];
 				sprintf(fullName,"%s/%s",cwd,obj);
@@ -362,24 +416,166 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 				linkTarget[l_size]=0;
 				struct stat prop;
 				chdir(cwd);
-				if(stat(linkTarget,&prop)) sprintf(aux,"symbolic link</b> (<b>%s</b> &rarr; <font color=red><b>%s</b></font>)", obj, linkTarget);
-				else sprintf(aux,"symbolic link</b> (<b>%s</b> &rarr; <font color=green><b>%s</b></font>)", obj, linkTarget); 
+				if(stat(linkTarget,&prop)) sprintf(aux,"Symbolic link> (<b>%s</b> &rarr; <font color=red><b>%s</b></font>)", obj, linkTarget);
+				else sprintf(aux,"Symbolic link (<b>%s</b> &rarr; <font color=green><b>%s</b></font>)", obj, linkTarget); 
 			break;
-			case S_IFREG:	sprintf(aux, "regular file</b> with %li bytes",sb.st_size);		break;
-			case S_IFSOCK:	strcat(aux, "socket</b>");		break;
-			default: strcat(aux, "an unknown object type</b>");	break;
+			case S_IFREG:	sprintf(aux, "Regular file with %li bytes",sb.st_size); isFile=1; break;
+			case S_IFSOCK:	strcat(aux, "Socket");		break;
+			default: strcat(aux, "Unknown object type>");	break;
 		}
 		
+
+
 		// timestamps
-		//
-		strcat(aux,"</td><td bgcolor=lightgray>");
 		aux=aux+strlen(aux);
-		sprintf(aux,"<small>%s was the last status change<br>%s was the last access<br>%s was the last modification</small>", ctime(&sb.st_ctime), ctime(&sb.st_atime), ctime(&sb.st_mtime));
+		sprintf(aux,"<p><small>Last modification: %s</small></td>", ctime(&sb.st_mtime));
 
 
-		strcat(aux,"</td></tr></table>");
+		// owner and group
+		aux=aux+strlen(aux);
+		sprintf(aux,"<td bgcolor=lightgray align=center>%s (UID=%i)<br>", getpwuid(sb.st_uid)->pw_name, sb.st_uid);
+		aux=aux+strlen(aux);
+		sprintf(aux,"<details><summary>Change User</summary><p><input id=newownname type=text><p><input type=button value=\"Change\" \
+				onclick=\"act('chown', '%s', document.getElementById('newownname').value);\"></p></details></td>",obj);
+
+		aux=aux+strlen(aux);
+		sprintf(aux,"<td bgcolor=lightgray align=center>%s (GID=%i)<br>", getgrgid(sb.st_gid)->gr_name, sb.st_gid);
+		aux=aux+strlen(aux);
+		sprintf(aux,"<details><summary>Change Group</summary><p><input id=newgrpname type=text><p><input type=button value=\"Change\" \
+				onclick=\"act('chgrp', '%s', document.getElementById('newgrpname').value);\"></p></details></td>",obj);
 
 
+
+
+		// PERMISSIONS
+		//
+		char buttons[500];
+		char *aB;
+		
+		// OWNER (USER) permissions
+		aux=aux+strlen(aux);
+		strcat(aux,"<td bgcolor=lightgray align=center>");
+		aB=buttons;*aB=0;
+		strcat(aB,"<br><details><summary>Change</summary><p>");
+		if (sb.st_mode & S_IRUSR) {strcat(aux,"[R] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[R]\" onclick=\"act('chmod','%s','u-r');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[R]\" onclick=\"act('chmod', '%s', 'u+r');\">",obj); }
+		if (sb.st_mode & S_IWUSR) {strcat(aux," [W] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[W]\" onclick=\"act('chmod','%s','u-w');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[W]\" onclick=\"act('chmod','%s','u+w');\">",obj); }
+		if (sb.st_mode & S_IXUSR) {strcat(aux," [X] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[X]\" onclick=\"act('chmod','%s','u-x');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[X]\" onclick=\"act('chmod','%s','u+x');\">",obj); }
+		strcat(aB,"</p></details></td>");
+		strcat(aux,buttons);
+
+		// GROUP permissions
+		aux=aux+strlen(aux);
+		strcat(aux,"<td bgcolor=lightgray align=center>");
+		aB=buttons;*aB=0;
+		strcat(aB,"<br><details><summary>Change</summary><p>");
+		if (sb.st_mode & S_IRGRP) {strcat(aux," [R] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[R]\" onclick=\"act('chmod','%s','g-r');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[R]\" onclick=\"act('chmod', '%s', 'g+r');\">",obj); }
+		if (sb.st_mode & S_IWGRP) {strcat(aux," [W] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[W]\" onclick=\"act('chmod','%s','g-w');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[W]\" onclick=\"act('chmod','%s','g+w');\">",obj); }
+		if (sb.st_mode & S_IXGRP) {strcat(aux," [X] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[X]\" onclick=\"act('chmod','%s','g-x');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[X]\" onclick=\"act('chmod','%s','g+x');\">",obj); }
+		strcat(aB,"</p></details></td>");
+		strcat(aux,buttons);
+
+		// OTHERS permissions
+		aux=aux+strlen(aux);
+		strcat(aux,"<td bgcolor=lightgray align=center>");
+		aB=buttons;*aB=0;
+		strcat(aB,"<br><details><summary>Change</summary><p>");
+		if (sb.st_mode & S_IROTH) {strcat(aux," [R] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[R]\" onclick=\"act('chmod','%s','o-r');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[R]\" onclick=\"act('chmod', '%s', 'o+r');\">",obj); }
+		if (sb.st_mode & S_IWOTH) {strcat(aux," [W] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[W]\" onclick=\"act('chmod','%s','o-w');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[W]\" onclick=\"act('chmod','%s','o+w');\">",obj); }
+		if (sb.st_mode & S_IXOTH) {strcat(aux," [X] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[X]\" onclick=\"act('chmod','%s','o-x');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[X]\" onclick=\"act('chmod','%s','o+x');\">",obj); }
+		strcat(aB,"</p></details></td>");
+		strcat(aux,buttons);
+
+		// special permissions
+		aux=aux+strlen(aux);
+		strcat(aux,"<td bgcolor=lightgray align=center>");
+		aB=buttons;*aB=0;
+		strcat(aB,"<br><details><summary>Change</summary><p>");
+		if (sb.st_mode & S_ISUID) {strcat(aux," [SetUID] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[SetUID]\" onclick=\"act('chmod','%s','u-s');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[SetUID]\" onclick=\"act('chmod', '%s', 'u+s');\">",obj); }
+		if (sb.st_mode & S_ISGID) {strcat(aux," [SetGID] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[SetGID]\" onclick=\"act('chmod','%s','g-s');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[SetGID]\" onclick=\"act('chmod','%s','g+s');\">",obj); }
+		if (sb.st_mode & S_ISVTX) {strcat(aux," [Sticky] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[Sticky]\" onclick=\"act('chmod','%s','-t');\">",obj); }
+		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[Sticky]\" onclick=\"act('chmod','%s','+t');\">",obj); }
+		strcat(aB,"</p></details></td>");
+		strcat(aux,buttons);
+
+
+
+		strcat(aux,"</tr></table>");
+	} // lstat() success
+
+
+
+
+
+
+
+
+	strcat(aux,"<table border=0 cellspacing=0 cellpadding=10<tr><td bgcolor=#c0c0d0 align=center style=\"width:600px\"><b>Signature analysis by the <i>file</i> command (magic-number)</b></td></tr><tr>");
+
+	// file's content type (uses the file command, if available)
+	if(file_command) {
+		sprintf(commandLine, "%s -b \"%s\"", file_command, filename);
+		p=popen(commandLine,"r");
+		fgets(typeDesc,300,p);
+		pclose(p);
+	} else {
+		strcpy(typeDesc, "<td bgcolor=#c0c0d0><font color=red>Sorry, the <i>file</i> command is not available.</font></td>");
+	}
+	aux=aux+strlen(aux);
+	sprintf(aux,"<td bgcolor=#c0c0d0><textarea cols=120 rows=2 readonly disabled>%s</textarea></td>", typeDesc);
+
+
+	strcat(aux,"</tr>");
+
+
+	// file's content (probe for text file)
+	//
+	if(isFile) {
+		p=fopen(filename,"r"); col=0; c=0; isText=1;
+		while(fread(&fileContent[c],1,1,p)) {
+			//if(fileContent[c]>127) { isText=0; fileContent[c]=32; }
+			//else
+			if(fileContent[c]<32) {
+				switch(fileContent[c]) {
+					case 13: // CR
+						col=0;
+						break;
+					case 10: // LF
+						col=0;
+						break;
+					case 9: // TAB
+						break;
+					default:
+						//printf("Bad caracter: %u\n",fileContent[c]);
+						isText=0; fileContent[c]=32;
+				}
+			}
+			c++; 
+			if(c==2000) break;
+			col++; if(col>150) { fileContent[c]=10; c++; col=0;}
+		}
+		fclose(p);
+		fileContent[c]=0;
+		if(isText) strcat(aux,"<tr><td bgcolor=#c0d0c0 align=center><b>Content sample (text file)</b></td></tr>");
+		else strcat(aux,"<tr><td bgcolor=#c0d0c0 align=center><b>Content sample (NOT A TEXT FILE)</b></td></tr>");
+		aux=aux+strlen(aux);
+		sprintf(aux,"<tr><td bgcolor=#c0d0c0><textarea cols=120 rows=30 readonly disabled>%s</textarea></td></tr></table>", fileContent);
+
+
+		// TODO - if it's a text file, edit option with textFileEditor
+		//
+		//
+		//
 
 
 
@@ -389,9 +585,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 
 
 
-
-
-
+	strcat(aux,"</tr></table>");
 	strcat(aux,HTML_BODY_FOOTER);
 	sendHttpStringResponse(sock, "200 Ok", "text/html", list);
 	return;
@@ -402,7 +596,9 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 
 
 
-/// the list response also contains several general options, e.g, create 
+/// the list response  - DIRECTORY CONTENT LISTING
+//
+//
 
 void sendListResponse(int sock, char *cwd) {
 	char list[5000], *aux;
@@ -442,11 +638,7 @@ void sendListResponse(int sock, char *cwd) {
 			var visibility = 'hidden'; window.setInterval(function() { document.getElementById(\"msg\").style.visibility = visibility; \
 			visibility = (visibility === 'visible') ? 'hidden' : 'visible'; }, 300); } \
 			</script>");
-
 	aux=aux+strlen(aux);
-
-	// bgcolor=#cfcfcf
-
 	sprintf(aux,"<td align=center valign=top style=\"width:300px\"><details><summary>Upload files from browser</summary> \
 			<table width=90%% border=0><tr><td style=\"width:300px\" bgcolor=#cfcfcf align=center valign=center> \
 			<br><form name=upload enctype=multipart/form-data method=POST id=upF action=/filemanager><input type=hidden name=secret value=\"%s\"><input type=hidden name=action value=upload> \
