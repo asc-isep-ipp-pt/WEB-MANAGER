@@ -4,7 +4,7 @@
 
 #define BASE_FOLDER "www"
 
-#define HTML_BODY_FOOTER "<footer><hr><small>Ultra Basic Web Manager version 0.1, May 2023<br><i>Andr&eacute; Moreira (asc@isep.ipp.pt)</i></small></footer></body></html>"
+#define HTML_BODY_FOOTER "<footer><hr><small>Ultra Basic Web Manager version 0.2, September 2025<br><i>Andr&eacute; Moreira (asc@isep.ipp.pt)</i></small></footer></body></html>"
 
 #define HTML_HEADER "<html><head> <meta charset=\"UTF-8\"><title>Web Manager</title><script>function act(a,o,o2){document.main.action.value=a;document.main.object.value=o;document.main.object2.value=o2;document.main.submit();} \
 	</script> \
@@ -19,6 +19,7 @@
 void processGET(int sock, char *requestLine);
 
 char *wget_command=NULL;
+char *file_command=NULL;
 char *root_folder="/";
 char *default_cwd="/";
 char *secret_file="/.web-manager.secret";
