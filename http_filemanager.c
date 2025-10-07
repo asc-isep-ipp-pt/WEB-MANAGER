@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -243,6 +244,13 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 
 
+		////////////////////////////////////////////// DETAILS
+
+		if(!strcmp(action,"viewedit")) { free(content); 
+
+			sendDetailsResponse(sock, cwd, object); return; }
+
+
 
 
 
@@ -364,8 +372,6 @@ void processPOSTfilemanager(int sock, char *request_line) {
 ///////////// TODO
 //
 
-
-
 void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	char list[500000], filename[200], *aux;
 	char commandLine[300];
@@ -381,7 +387,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		<p><font size=7>&nbsp; &nbsp; <b>%s</b><br></font><font size=5>(%s)</font> \
+		<p><img src=/favicon.ico width=32 height=32><font size=7>&nbsp; &nbsp; <b>%s</b><br></font><font size=5>(%s)</font> \
 		<p><input type=button value=\" CANCEL \" onclick=\"act('list','','');\"></p><hr> \
 		",HTML_HEADER,access_secret,cwd,obj,filename);
 
@@ -610,7 +616,7 @@ void sendListResponse(int sock, char *cwd) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		       <form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		       <input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		       <p><font size=6>&nbsp; &nbsp; Current working directory: <b>%s</b></font> \
+		       <p><img src=favicon.ico><font size=6>&nbsp; &nbsp; Current working directory: <b>%s</b></font> \
 		       <p><table width=100%% border=0 cellspacing=3><tr> \
 		       <td align=center valign=top style=\"width:250px\"><details><summary>CREATE</summary><p><input id=mkobjname type=text> \
 		       <p><input type=button value=\"FOLDER\" onclick=\"act('mkdir',document.getElementById('mkobjname').value,'');\"> \
@@ -718,11 +724,18 @@ void sendListResponse(int sock, char *cwd) {
 
 			strcat(aux,"</summary><p><table width=100%% border=0 cellspacing=3><tr>");
 
+			// DETAILS
 			aux=aux+strlen(aux);
-			sprintf(aux,"<td align=center valign=top style=\"width:250px\"><input type=button value=\"Properties\" onClick=\"javascript:act('details','%s','');\"></td>", e->d_name);
+			sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"Properties\" onClick=\"javascript:act('details','%s','');\"></td>", e->d_name);
 
+			//
+			// VIEW-EDIT TODO - TODO view and edit file content (if it's text)
 			aux=aux+strlen(aux);
-			if(e->d_type==DT_REG) sprintf(aux,"<td align=center valign=top style=\"width:250px\"><input type=button value=\"Download\" onClick=\"javascript:act('download','%s','');\"></td>",
+			if(e->d_type==DT_REG) sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"View/Edit\" onClick=\"javascript:act('viewedit','%s','');\"></td>",
+					e->d_name);
+			// DOWNLOAD
+			aux=aux+strlen(aux);
+			if(e->d_type==DT_REG) sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"Download\" onClick=\"javascript:act('download','%s','');\"></td>",
 					e->d_name);
 
 			// RENAME or CLONE 
@@ -740,25 +753,13 @@ void sendListResponse(int sock, char *cwd) {
 			if(e->d_type==DT_DIR) sprintf(aux,"<input type=button value=\"Confirm Remove Folder and Contents\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",e->d_name); 
 			else sprintf(aux,"<input type=button value=\"Confirm Remove File\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",e->d_name); 
 
-
 			// COPY TO CLIPBOARD
 			aux=aux+strlen(aux);
-			if(!*clipboardContent) sprintf(aux,"<td align=center valign=top style=\"width:250px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",
+			if(!*clipboardContent) sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",
 					e->d_name);
 			else
 				sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>COPY to CLIPBOARD</summary><p> \
 						<input type=button value=\"Confirm Overwrite Clipboard\" onClick=\"javascript:act('copytoclip','%s','');\"></p></details></td>",e->d_name);
-
-
-
-
-			// TODO:
-
-
-			
-			// Edit textfile (TODO)
-
-
 
 			strcat(aux,"</tr></table><hr></p></details>");
 			fwrite(list,1,strlen(list),tmpFile);

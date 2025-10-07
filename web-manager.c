@@ -16,7 +16,7 @@
 
 
 
-// TODO - read the secret from a file instead of passing it through the command line
+// read the secret from a file
 
 void usage_message(void) {printf("Possible command line options are:\n --secret-file FILE-WITH-SECRET-STRING (default is %s)\n --root-folder FOLDER (default is %s)\n --initial-cwd FOLDER (default is %s)\n --port TCP-PORT-NUMBER (default is %s)\n\n",
 		secret_file,root_folder,default_cwd,port_number);exit(1);}
@@ -31,12 +31,6 @@ int main(int argc, char **argv) {
 	char new_secret[2500];
 	char *aux;
 
-	//
-	// ARGUMENTS: server-port-number access-secret root-folder initial-fm-folder
-	// ALL ARGUMENTS ARE MANDATORY
-	//
-	//
-	//
 	c=1;
 	while(c<argc) {
 		if(!strcmp(argv[c],"--help")) usage_message();
@@ -120,16 +114,16 @@ int main(int argc, char **argv) {
 	listen(sock,SOMAXCONN);
 	adl=sizeof(from);
 	for(;;)	{
-        	Nsock=accept(sock,(struct sockaddr *)&from,&adl); // WAIT FOR CLIENT CONNECTION
+        	Nsock=accept(sock,(struct sockaddr *)&from,&adl); // WAIT A FOR CLIENT CONNECTION
         	if(!fork()) {
                 	close(sock);
 			readLineCRLF(Nsock,line); // read the request line
 			// printf("Request line: %s\n", line);
+			if(!strncmp(line,"GET /favicon.ico",16)) { do readLineCRLF(Nsock,line); while(*line); sendHttpResponse(Nsock,"200 Ok","image/x-icon",favicon,favicon_length);}
+			else
 			if(!strncmp(line,"GET /filemanager",16)) processGETfilemanager(Nsock,line);
 			else
 			if(!strncmp(line,"POST /filemanager",17)) processPOSTfilemanager(Nsock, line);
-			//else
-			//if(!strncmp(line,"POST /textFileEditor",20)) processPOSTtextFileEditor(Nsock, line);
 			else {
 				printf("Request line not supported by this server: %s\n",line);
 				sprintf(line,"%s<body bgcolor=yellow><h1>HTTP method not supported</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
