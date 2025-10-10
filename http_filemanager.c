@@ -48,7 +48,6 @@ void processGETfilemanager(int sock, char *requestLine) {
 			<input type=hidden name=object2 value=><input type=hidden name=cwd value=></form>%s",HTML_HEADER,access_secret,HTML_BODY_FOOTER);
 		sendHttpStringResponse(sock, "200 Ok", "text/html", line);
 		}
-		
 }
 
 
@@ -58,6 +57,8 @@ void processGETfilemanager(int sock, char *requestLine) {
 void processPOSTfilemanager(int sock, char *request_line) {
 	char line[5*B_SIZE], content_type[B_SIZE];
 	long content_len;
+	long i, todo;
+	char *aux, *aux1, *content;
 
 	content_len=0;
 	*content_type=0;
@@ -73,15 +74,14 @@ void processPOSTfilemanager(int sock, char *request_line) {
 	if(!content_len) { puts("Fatal error: empty POST request"); return; }
 
 	printf("Content type is %s\n",content_type);
+	printf("Content length is %li\n",content_len);
 
 	//if(!strcasecmp(content_type,HTTP_CONTENT_TYPE_FORM_URLENCODED)) {
 	if(!strcasecmp(content_type,"text/plain")) {
 		// read the entire content to memory
-		int i, todo;
-		char *aux, *aux1, *content;
 
 		todo=content_len;
-		content=malloc(content_len);
+		content=malloc(content_len+1);
 		if(!content) { puts("Fatal error allocating memory for POST data"); return; }
 		aux=content;
 		while(todo) {
@@ -90,8 +90,6 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			aux+=i; todo-=i;
 			}
 		content[content_len]=0;
-
-		puts(content);
 
 		/////////////////////////////////////// check the secret
 		aux=strstr(content,"secret=");
@@ -108,7 +106,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
-		char action[100];
+		char action[B_SIZE];
 		aux1=action; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 
 		/////////////////////////////////////// get the cwd
@@ -134,25 +132,11 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			}
 			sendListResponse(sock, line); return; }
 
-		////////////////////////////////////////////// DELETE CLIPBOARD CONTENT
-
-		if(!strcmp(action,"deleteclip")) { free(content); 
-			sprintf(line,"rm -Rf %s/*",clipboard_folder);
-			system(line);
-			sendListResponse(sock, cwd); return; }
-
-		////////////////////////////////////////////// PASTE FROM CLIPBOARD
-
-		if(!strcmp(action,"pasteclip")) { free(content); 
-			sprintf(line,"cp -Rf %s/* \"%s/\"",clipboard_folder,cwd);
-			system(line);
-			sendListResponse(sock, cwd); return; }
-
-
 
 
 
 	
+		
 		/////////////////////////////////////// Get the object value
 		aux=strstr(content,"object=");
 		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
@@ -188,12 +172,18 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			sendListResponse(sock, line); return; }
 
 
-
-		////////////////// for other commands the slash is not allowed in the object name
+		////////////////// for other commands the slash is not allowed in the object name - REMOVE SLASHES FROM OBJECT
 		
-		aux=object; while(*aux && *aux!='/') aux++; *aux=0;
+		aux=object;
+		while(*aux) {
+			if(*aux=='/') {
+				aux1=aux+1; while(*aux1) { *(aux1-1)=*aux1; aux1++; }
+				*(aux1-1)=0;
+			}
+			if(*aux!='/') aux++;
+		}
 
-
+		if(!*object) { free(content); sendListResponse(sock, cwd); return; }
 
 		////////////////////////////////////////////// MKDIR
 
@@ -229,12 +219,23 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		if(!strcmp(action,"copytoclip")) { free(content); 
 
-			sprintf(line,"rm -Rf %s/*",clipboard_folder);
-			system(line);
-			sprintf(line,"cp -R \"%s/%s\" %s/",cwd,object,clipboard_folder);
+			sprintf(line,"cp -R \"%s/%s\" \"%s/\"",cwd,object,clipboard_folder);
 			system(line);
 			sendListResponse(sock, cwd); return; }
 
+		////////////////////////////////////////////// DELETE CLIPBOARD OBJECT (TODO)
+
+		if(!strcmp(action,"deleteclip")) { free(content); 
+			sprintf(line,"rm -Rf \"%s/%s\"",clipboard_folder,object);
+			system(line);
+			sendListResponse(sock, cwd); return; }
+
+		////////////////////////////////////////////// PASTE FROM OBJECT (TODO)
+
+		if(!strcmp(action,"pasteclip")) { free(content); 
+			sprintf(line,"cp -Rf \"%s/%s\" \"%s/\"",clipboard_folder,object,cwd);
+			system(line);
+			sendListResponse(sock, cwd); return; }
 
 		////////////////////////////////////////////// DETAILS
 
@@ -243,23 +244,45 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			sendDetailsResponse(sock, cwd, object); return; }
 
 
-
-		////////////////////////////////////////////// DETAILS
+		////////////////////////////////////////////// VIEW / EDIT TEXT FILE
 
 		if(!strcmp(action,"viewedit")) { free(content); 
 
-			sendDetailsResponse(sock, cwd, object); return; }
+			sendTextFileEditorResponse(sock, cwd, object); return; }
+
+
+		////////////////////////////////////////////// VIEW / EDIT TEXT FILE - SAVE FILE (TODO)
+
+		if(!strncmp(action,"viewedit-save",13)) {
+			aux=strstr(content,"usertext=");
+			if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
+			sprintf(line,"%s/%s",cwd,object);
+			FILE *f=fopen(line,"w");
+			aux=aux+9;
+
+			// issue: one initial newline is being removed in each save - TODO trying to find why !!!
+			
+			content[content_len-2]=0; // the last CR+LF is not part of the textarea field, so remove the last two bytes
+			while(*aux) {
+				fwrite(aux,1,1,f);
+				aux++;
+				}
+			fclose(f);
+			free(content);
+			if(!strcmp(action,"viewedit-save-close")) sendListResponse(sock, cwd);
+			else sendTextFileEditorResponse(sock, cwd, object);
+			return;
+		}
 
 
 
 
 
-
-
-
-
-
-		/////////////////////////////////////// get the object2
+		/////////////////////////////////////// The remaining actions require "object2"
+		//
+		/////////////////////////////////////// Get "object2" for actions that require "object2"
+		//
 		aux=strstr(content,"object2=");
 		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
@@ -341,7 +364,9 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		free(content);
 		} // END CONTENT-TYPE PLAIN/TEXT
-	else
+		  //
+		  //
+	else // content is not text/plain
 	if(!strncasecmp(content_type,"multipart/form-data",19)) {
 
 		// Content type is multipart/form-data; boundary=---------------------------6065758406394847092843530405
@@ -350,46 +375,39 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		while(*boundary!='=') boundary++;
 		boundary++;
 		processMultipartPost(sock,content_len,boundary);
-		return;
+		return; 
 	}
 
-
-
-	//			secret=ola&action=list&object=&object2=&cwd=
-	//
-	//
-
-
 	sendHttpStringResponse(sock, "200 Ok", "text/html", "OK");
-
 }
 
 
 
 
 
-/// SEND DETAILS / PROPERTIES RESPONSE
-///////////// TODO
-//
+	/// SEND DETAILS / PROPERTIES RESPONSE
+	///////////// TODO: view/edit
+	//
 
 void sendDetailsResponse(int sock, char *cwd, char *obj) {
-	char list[500000], filename[200], *aux;
-	char commandLine[300];
-	char typeDesc[300];
-	int col, c, fileMaxContent=2000;
+	char list[10*B_SIZE], filename[B_SIZE], *aux;
+	char commandLine[2*B_SIZE];
+	char typeDesc[B_SIZE];
+	int col, c, fileMaxContent=6*B_SIZE;
 	char isText, isFile;
-	unsigned char fileContent[fileMaxContent];
+	unsigned char fileContent[fileMaxContent+1];
 	FILE *p;
 	struct stat sb;
+	FILE *tmpFile=tmpfile();
 
 	if(strcmp(cwd,"/")) sprintf(filename,"%s/%s",cwd,obj); else sprintf(filename,"/%s",obj);
 
 	sprintf(list,"%s<body bgcolor=gray> \
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		<p><img src=/favicon.ico width=32 height=32><font size=7>&nbsp; &nbsp; <b>%s</b><br></font><font size=5>(%s)</font> \
-		<p><input type=button value=\" CANCEL \" onclick=\"act('list','','');\"></p><hr> \
-		",HTML_HEADER,access_secret,cwd,obj,filename);
+		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Properties/details about</i> [<b>%s</b>]</font> \
+		<p><input type=button value=\" CLOSE \" onclick=\"act('list','','');\"></p><hr> \
+		",HTML_HEADER,access_secret,cwd,filename);
 
 	aux=list+strlen(list);
 
@@ -451,16 +469,17 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 				onclick=\"act('chgrp', '%s', document.getElementById('newgrpname').value);\"></p></details></td>",obj);
 
 
+		fwrite(list,1,strlen(list),tmpFile);
+		aux=list;
 
 
 		// PERMISSIONS
 		//
-		char buttons[500];
+		char buttons[B_SIZE];
 		char *aB;
 		
 		// OWNER (USER) permissions
-		aux=aux+strlen(aux);
-		strcat(aux,"<td bgcolor=lightgray align=center>");
+		strcpy(aux,"<td bgcolor=lightgray align=center>");
 		aB=buttons;*aB=0;
 		strcat(aB,"<br><details><summary>Change</summary><p>");
 		if (sb.st_mode & S_IRUSR) {strcat(aux,"[R] "); aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"-[R]\" onclick=\"act('chmod','%s','u-r');\">",obj); }
@@ -513,20 +532,14 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 		else { aB=aB+strlen(aB); sprintf(aB,"<input type=button value=\"+[Sticky]\" onclick=\"act('chmod','%s','+t');\">",obj); }
 		strcat(aB,"</p></details></td>");
 		strcat(aux,buttons);
-
-
-
 		strcat(aux,"</tr></table>");
+
 	} // lstat() success
 
+	fwrite(list,1,strlen(list),tmpFile);
+	aux=list;
 
-
-
-
-
-
-
-	strcat(aux,"<table border=0 cellspacing=0 cellpadding=10<tr><td bgcolor=#c0c0d0 align=center style=\"width:600px\"><b>Signature analysis by the <i>file</i> command (magic-number)</b></td></tr><tr>");
+	strcpy(aux,"<table border=0 cellspacing=0 cellpadding=10<tr><td bgcolor=#c0c0d0 align=center style=\"width:600px\"><b>Signature analysis by the <i>file</i> command (magic-number)</b></td></tr><tr>");
 
 	// file's content type (uses the file command, if available)
 	if(file_command) {
@@ -538,7 +551,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 		strcpy(typeDesc, "<td bgcolor=#c0c0d0><font color=red>Sorry, the <i>file</i> command is not available.</font></td>");
 	}
 	aux=aux+strlen(aux);
-	sprintf(aux,"<td bgcolor=#c0c0d0><textarea cols=120 rows=2 readonly disabled>%s</textarea></td>", typeDesc);
+	sprintf(aux,"<td bgcolor=#c0c0d0><textarea cols=120 rows=3 readonly disabled>%s</textarea></td>", typeDesc);
 
 
 	strcat(aux,"</tr>");
@@ -567,8 +580,8 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 				}
 			}
 			c++; 
-			if(c==2000) break;
-			col++; if(col>150) { fileContent[c]=10; c++; col=0;}
+			if(c==fileMaxContent) break;
+			col++; if(col>150) { fileContent[c]=10; c++; if(c==fileMaxContent) break; col=0;}
 		}
 		fclose(p);
 		fileContent[c]=0;
@@ -578,22 +591,15 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 		sprintf(aux,"<tr><td bgcolor=#c0d0c0><textarea cols=120 rows=30 readonly disabled>%s</textarea></td></tr></table>", fileContent);
 
 
-		// TODO - if it's a text file, edit option with textFileEditor
-		//
-		//
-		//
-
-
 
 	}
 
 
-
-
-
 	strcat(aux,"</tr></table>");
 	strcat(aux,HTML_BODY_FOOTER);
-	sendHttpStringResponse(sock, "200 Ok", "text/html", list);
+	fwrite(list,1,strlen(list),tmpFile);
+	sendHttpFileContent(sock, tmpFile, "200 Ok", "text/html");
+	fclose(tmpFile); // this also removes the temporary file
 	return;
 }
 
@@ -607,7 +613,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 //
 
 void sendListResponse(int sock, char *cwd) {
-	char list[5000], *aux;
+	char list[10*B_SIZE], *aux;
 	DIR *d;
 	struct dirent *e;
 
@@ -616,7 +622,7 @@ void sendListResponse(int sock, char *cwd) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		       <form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		       <input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		       <p><img src=favicon.ico><font size=6>&nbsp; &nbsp; Current working directory: <b>%s</b></font> \
+		       <p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Directory content listing for</i> [<b>%s</b>]</font> \
 		       <p><table width=100%% border=0 cellspacing=3><tr> \
 		       <td align=center valign=top style=\"width:250px\"><details><summary>CREATE</summary><p><input id=mkobjname type=text> \
 		       <p><input type=button value=\"FOLDER\" onclick=\"act('mkdir',document.getElementById('mkobjname').value,'');\"> \
@@ -652,41 +658,52 @@ void sendListResponse(int sock, char *cwd) {
 			</form><div id=msg></div></td></tr></table></details></td>", access_secret, cwd);
 
 
-	// The Clipboard
+
+	fwrite(list,1,strlen(list),tmpFile);
+
+
+
+
+	// CLIPBOARD
 	//
-	char clipboardContent[B_SIZE];
+	//
+	
+	strcpy(list,"<td align=center valign=top style=\"width:450px\"><details><summary>CLIPBOARD</summary><p><table width=100% border=0 cellpadding=2>");
+	aux=list+strlen(list);
+	
 	d=opendir(clipboard_folder);
 	e=readdir(d);
 	while(e) {
-		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) break;
+		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
+			sprintf(aux,"<tr><td align=center style=\"width:200px\" style=\"vertical-align:middle\"><small><b>%s", e->d_name);
+			if(e->d_type==DT_DIR) strcat(aux,"/"); else if(e->d_type==DT_LNK) strcat(aux," &rarr;");
+			aux=aux+strlen(aux);
+			sprintf(aux,"</b></small></td><td align=center style=\"width:200px\"><input type=button value=\"PASTE\" onclick=\"act('pasteclip','%s','');\"> &nbsp; \
+					<input type=button value=\"DELETE\" onclick=\"act('deleteclip','%s','');\"></td></tr>", e->d_name, e->d_name);
+			aux=aux+strlen(aux);
+		}
 		e=readdir(d);
 	}
-
-	if(e) { strcpy(clipboardContent,e->d_name); if(e->d_type==DT_DIR) strcat(clipboardContent,"/"); else if(e->d_type==DT_LNK) strcat(clipboardContent," &rarr;");}
-	else *clipboardContent=0;
 	closedir(d);
-
-	aux=aux+strlen(aux);
-	if(*clipboardContent) {
-		sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>CLIPBOARD (*)</summary><p>%s",clipboardContent);
-		strcat(aux,"</p><p><input type=button value=\"PASTE\" onclick=\"act('pasteclip','','');\">&nbsp;<input type=button value=\"DELETE\" onclick=\"act('deleteclip','','');\"></p></details></td>");
-	}
-	else {
-		sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>CLIPBOARD</summary><p></p></details></td>");
-	}
+	strcpy(aux,"</table></details></tr></table></p><hr>");
 
 
-	strcat(aux,"</tr></table></p><hr>");
-	aux=aux+strlen(aux);
+
+
+
+
+
+
+
 
 	// Add to the list the current folder listing contents
 	d=opendir(cwd);
 	printf("Listing folder %s\n",cwd);
 	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",HTML_HEADER,cwd,HTML_BODY_FOOTER);
-			           sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
+			           fclose(tmpFile); sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
 	
 	// add ../ for cdup
-	if(strcmp(cwd,root_folder)) strcat(aux,"<p><a href=\"javascript:act('cdup','','');\"><b> ../ <i>(parent folder)</i></b></a></li>");
+	if(strcmp(cwd,root_folder)) strcat(list,"<p><a href=\"javascript:act('cdup','','');\"><b> ../ <i>(parent folder)</i></b></a></li>");
 
 	fwrite(list,1,strlen(list),tmpFile);
 
@@ -755,17 +772,11 @@ void sendListResponse(int sock, char *cwd) {
 
 			// COPY TO CLIPBOARD
 			aux=aux+strlen(aux);
-			if(!*clipboardContent) sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",
+			sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",
 					e->d_name);
-			else
-				sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>COPY to CLIPBOARD</summary><p> \
-						<input type=button value=\"Confirm Overwrite Clipboard\" onClick=\"javascript:act('copytoclip','%s','');\"></p></details></td>",e->d_name);
-
 			strcat(aux,"</tr></table><hr></p></details>");
 			fwrite(list,1,strlen(list),tmpFile);
 			}
-
-
 		}
 	while(e);
 	closedir(d);
@@ -773,8 +784,11 @@ void sendListResponse(int sock, char *cwd) {
 	fwrite(list,1,strlen(list),tmpFile);
 	sendHttpFileContent(sock, tmpFile, "200 Ok", "text/html");
 	fclose(tmpFile); // this also removes the temporary file
-	return;
 }
+
+
+
+
 
 
 
@@ -893,13 +907,87 @@ void processMultipartPost(int sock, long content_len, char *bound) {
 			}
 			fclose(f);
 		}  // end receive file upload
-
-
 	}
 	sendListResponse(sock, cwd);
-	return; 
 }
 	
 
+
+
+
+void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
+	char list[10*B_SIZE];
+	char filename[B_SIZE];
+	int done, col, c, fileMaxContent=6*B_SIZE;
+	char isText;
+	unsigned char fileContent[fileMaxContent+1];
+	FILE *f, *tmpFile=tmpfile();
+
+	if(strcmp(cwd,"/")) sprintf(filename,"%s/%s",cwd,obj); else sprintf(filename,"/%s",obj);
+
+	sprintf(list,"%s<body bgcolor=gray> \
+		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
+		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'> \
+		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>View/Edit file</i> [<b>%s</b>]</font> \
+		",HTML_HEADER,access_secret,cwd,filename);
+	fwrite(list,1,strlen(list),tmpFile);
+
+	// probe the file to check if it's text
+	// at the same time prepare a content to be displayed in case it's not a text file
+	f=fopen(filename,"r"); col=0; c=0; isText=1;
+	while(fread(&fileContent[c],1,1,f)) {
+		if(fileContent[c]<32) {
+			switch(fileContent[c]) {
+				case 13: // CR
+					col=0;
+					break;
+				case 10: // LF
+					col=0;
+					break;
+				case 9: // TAB
+					break;
+				default:
+					//printf("Bad caracter: %u\n",fileContent[c]);
+					isText=0; fileContent[c]=32;
+				}
+		}
+		c++; 
+		if(c==fileMaxContent) break;
+		col++; if(col>150) { fileContent[c]=10; c++; if(c==fileMaxContent) break; col=0;}
+	}
+	fclose(f);
+	fileContent[c]=0;
+
+	if(isText) {
+		sprintf(list,"<p><table border=0 cellspacing=3><tr><td align=center valign=top style=\"width:400px\"><details><summary>CLOSE</summary> \
+				<p><input type=button value=\" LOSE CHANGES AND CLOSE \" onclick=\"act('list','','');\"> &nbsp; \
+				<input type=button value=\" SAVE AND CLOSE \" onclick=\"act('viewedit-save-close','%s','');\"></details></p></td> \
+				<td align=center valign=top style=\"width:300px\"><details><summary>SAVE / SAVE AS</summary> \
+				<p><input id=saveasname type=text value='%s' size=30'></p><p><input type=button value=\" SAVE \" onclick=\"act('viewedit-save',document.getElementById('saveasname').value,'');\"></p> \
+				</details></td></table> \
+				<hr><p><textarea cols=150 rows=40 name=usertext>", obj, obj);
+
+		fwrite(list,1,strlen(list),tmpFile);
+
+		f=fopen(filename,"r"); // read the file content into the textarea - TODO: issue if the file contains the </textarea> html tag
+		do {
+			done=fread(fileContent,1,B_SIZE,f);
+			if(done) fwrite(fileContent,1,done,tmpFile);
+		}
+		while(done);
+		fclose(f);
+		strcpy(list,"</textarea></form>");
+	}
+	else {
+		sprintf(list,"</form><p><input type=button value=\" CLOSE \" onclick=\"act('list','','');\"></p><hr><h3>Sorry, this is <u>NOT A TEXT FILE</u>, you can't edit it with this text editor.</h3> \
+				<p>Here is a readonly view of parts of the file's content: \
+				<p><textarea cols=150 rows=40 readonly disabled>%s</textarea>", fileContent);
+	}
+	
+	strcat(list,HTML_BODY_FOOTER);
+	fwrite(list,1,strlen(list),tmpFile);
+	sendHttpFileContent(sock, tmpFile, "200 Ok", "text/html");
+	fclose(tmpFile); // this also removes the temporary file
+}
 		
 
