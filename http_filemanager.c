@@ -219,21 +219,25 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		if(!strcmp(action,"copytoclip")) { free(content); 
 
-			sprintf(line,"cp -R \"%s/%s\" \"%s/\"",cwd,object,clipboard_folder);
+			sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"",cwd,object,clipboard_folder);
 			system(line);
 			sendListResponse(sock, cwd); return; }
 
-		////////////////////////////////////////////// DELETE CLIPBOARD OBJECT (TODO)
+		////////////////////////////////////////////// DELETE CLIPBOARD OBJECT 
 
-		if(!strcmp(action,"deleteclip")) { free(content); 
-			sprintf(line,"rm -Rf \"%s/%s\"",clipboard_folder,object);
+		if(!strncmp(action,"deleteclip",10)) { free(content); 
+			if(!strcmp(action,"deleteclipALL")) sprintf(line,"rm -Rf \"%s/\"* \"%s/\".*",clipboard_folder,clipboard_folder);
+			else sprintf(line,"rm -Rf \"%s/%s\"",clipboard_folder,object);
 			system(line);
 			sendListResponse(sock, cwd); return; }
 
-		////////////////////////////////////////////// PASTE FROM OBJECT (TODO)
+		////////////////////////////////////////////// PASTE FROM OBJECT
 
-		if(!strcmp(action,"pasteclip")) { free(content); 
-			sprintf(line,"cp -Rf \"%s/%s\" \"%s/\"",clipboard_folder,object,cwd);
+		if(!strncmp(action,"pasteclip",9)) { free(content); 
+			if(!strcmp(action,"pasteclipALL")) {
+				sprintf(line,"cp -fdR \"%s/\"* \"%s/\"", clipboard_folder,cwd);  // ISSUE: objects started by a dot are not copied TODO
+			}
+			else sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"",clipboard_folder,object,cwd);
 			system(line);
 			sendListResponse(sock, cwd); return; }
 
@@ -393,7 +397,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	char list[10*B_SIZE], filename[B_SIZE], *aux;
 	char commandLine[2*B_SIZE];
 	char typeDesc[B_SIZE];
-	int col, c, fileMaxContent=6*B_SIZE;
+	int c, fileMaxContent=6*B_SIZE;
 	char isText, isFile;
 	unsigned char fileContent[fileMaxContent+1];
 	FILE *p;
@@ -560,17 +564,15 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	// file's content (probe for text file)
 	//
 	if(isFile) {
-		p=fopen(filename,"r"); col=0; c=0; isText=1;
+		p=fopen(filename,"r"); c=0; isText=1;
 		while(fread(&fileContent[c],1,1,p)) {
 			//if(fileContent[c]>127) { isText=0; fileContent[c]=32; }
 			//else
 			if(fileContent[c]<32) {
 				switch(fileContent[c]) {
 					case 13: // CR
-						col=0;
 						break;
 					case 10: // LF
-						col=0;
 						break;
 					case 9: // TAB
 						break;
@@ -581,7 +583,6 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 			}
 			c++; 
 			if(c==fileMaxContent) break;
-			col++; if(col>150) { fileContent[c]=10; c++; if(c==fileMaxContent) break; col=0;}
 		}
 		fclose(p);
 		fileContent[c]=0;
@@ -616,7 +617,7 @@ void sendListResponse(int sock, char *cwd) {
 	char list[10*B_SIZE], *aux;
 	DIR *d;
 	struct dirent *e;
-
+	int i;
 	FILE *tmpFile=tmpfile();
 
 	sprintf(list,"%s<body bgcolor=gray> \
@@ -673,6 +674,7 @@ void sendListResponse(int sock, char *cwd) {
 	
 	d=opendir(clipboard_folder);
 	e=readdir(d);
+	i=0;
 	while(e) {
 		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
 			sprintf(aux,"<tr><td align=center style=\"width:200px\" style=\"vertical-align:middle\"><small><b>%s", e->d_name);
@@ -681,10 +683,16 @@ void sendListResponse(int sock, char *cwd) {
 			sprintf(aux,"</b></small></td><td align=center style=\"width:200px\"><input type=button value=\"PASTE\" onclick=\"act('pasteclip','%s','');\"> &nbsp; \
 					<input type=button value=\"DELETE\" onclick=\"act('deleteclip','%s','');\"></td></tr>", e->d_name, e->d_name);
 			aux=aux+strlen(aux);
+			i++;
 		}
 		e=readdir(d);
 	}
 	closedir(d);
+	if(i>1) {
+		strcpy(aux,"<tr><td colspan=2 align=center><hr><input type=button value=\"PASTE ALL\" onclick=\"act('pasteclipALL','all','');\">&nbsp; \
+			         &nbsp; <input type=button value=\"DELETE ALL\" onclick=\"act('deleteclipALL','all','');\"></td></tr>");
+		aux=aux+strlen(aux);
+	}
 	strcpy(aux,"</table></details></tr></table></p><hr>");
 
 
