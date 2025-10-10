@@ -59,6 +59,8 @@ void processPOSTfilemanager(int sock, char *request_line) {
 	long content_len;
 	long i, todo;
 	char *aux, *aux1, *content;
+	DIR *d;
+	struct dirent *e;
 
 	content_len=0;
 	*content_type=0;
@@ -131,9 +133,6 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			strcpy(line,cwd); aux=line+strlen(line)-1; while(*aux!='/') aux--; if(aux==line) aux++; *aux=0;
 			}
 			sendListResponse(sock, line); return; }
-
-
-
 
 	
 		
@@ -233,13 +232,26 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		////////////////////////////////////////////// PASTE FROM OBJECT
 
-		if(!strncmp(action,"pasteclip",9)) { free(content); 
+		if(!strncmp(action,"pasteclip",9)) {
+			free(content); 
 			if(!strcmp(action,"pasteclipALL")) {
-				sprintf(line,"cp -fdR \"%s/\"* \"%s/\"", clipboard_folder,cwd);  // ISSUE: objects started by a dot are not copied TODO
+				d=opendir(clipboard_folder);  // this approach avoids issueis when copying all objects starting with a dot (the issue is .. will be included)
+				e=readdir(d);
+				while(e) {
+					 if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
+						sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"", clipboard_folder,e->d_name,cwd);
+						system(line);
+					 }
+				e=readdir(d);
+				}
+				closedir(d);
 			}
-			else sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"",clipboard_folder,object,cwd);
-			system(line);
-			sendListResponse(sock, cwd); return; }
+			else {
+				sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"",clipboard_folder,object,cwd);
+				system(line);
+			}
+			sendListResponse(sock, cwd); return; 
+		}
 
 		////////////////////////////////////////////// DETAILS
 
