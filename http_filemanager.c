@@ -566,20 +566,18 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 
 	strcpy(aux,"<table border=0 cellspacing=0 cellpadding=10<tr><td bgcolor=#c0c0d0 align=center style=\"width:600px\"><b>Signature analysis by the <i>file</i> command (magic-number)</b></td></tr><tr>");
 
+	aux=aux+strlen(aux);
 	// file's content type (uses the file command, if available)
 	if(file_command) {
 		sprintf(commandLine, "%s -b \"%s\"", file_command, filename);
 		p=popen(commandLine,"r");
 		fgets(typeDesc,300,p);
 		pclose(p);
+		sprintf(aux,"<td bgcolor=#c0c0d0><textarea cols=120 rows=3 readonly disabled>%s</textarea></td></tr>", typeDesc);
 	} else {
-		strcpy(typeDesc, "<td bgcolor=#c0c0d0><font color=red>Sorry, the <i>file</i> command is not available.</font></td>");
+		strcpy(aux, "<td bgcolor=#c0c0d0><font color=red>Sorry, the <i>file</i> command is not available.</font></td></tr>");
 	}
-	aux=aux+strlen(aux);
-	sprintf(aux,"<td bgcolor=#c0c0d0><textarea cols=120 rows=3 readonly disabled>%s</textarea></td>", typeDesc);
 
-
-	strcat(aux,"</tr>");
 
 
 	// file's content (probe for text file)
@@ -651,9 +649,9 @@ void sendListResponse(int sock, char *cwd) {
 		       <input type=button value=\" FILE \" onclick=\"act('mkfile',document.getElementById('mkobjname').value,'');\"></p></details</td> \
 		       <td></td>",HTML_HEADER,access_secret,cwd,cwd);
 
-	strcat(list,"<td align=center valign=top style=\"width:300px\"><details><summary>Upload file from URL (wget)</summary><p>");
+	strcat(list,"<td align=center valign=top style=\"width:450px\"><details><summary>Upload file from URL (wget)</summary><p>");
 	if(wget_command) {
-		strcat(list,"<input id=urlwget type=url name=urlwget> \
+		strcat(list,"<input id=urlwget type=url name=urlwget size=50> \
 			<p><input type=button value=\"DOWNLOAD\" onclick=\"act('wget',document.getElementById('urlwget').value,'');\"></p></details></td>");
 	}
 	else {
