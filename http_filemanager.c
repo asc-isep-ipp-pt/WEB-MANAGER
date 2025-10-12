@@ -55,15 +55,18 @@ void processGETfilemanager(int sock, char *requestLine) {
 
 
 void processPOSTfilemanager(int sock, char *request_line) {
-	char line[5*B_SIZE], content_type[B_SIZE];
+	char line[5*B_SIZE], content_type[B_SIZE], filename[2*B_SIZE];
 	long content_len;
 	long i, todo;
 	char *aux, *aux1, *content;
 	DIR *d;
 	struct dirent *e;
+	FILE *f;
 
 	content_len=0;
 	*content_type=0;
+
+	//puts(request_line);
 
         do {    // read the remaining header lines
                 readLineCRLF(sock,line);
@@ -75,11 +78,11 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 	if(!content_len) { puts("Fatal error: empty POST request"); return; }
 
-	printf("Content type is %s\n",content_type);
-	printf("Content length is %li\n",content_len);
+	//printf("Content type is %s\n",content_type);
+	//printf("Content length is %li\n",content_len);
 
 	//if(!strcasecmp(content_type,HTTP_CONTENT_TYPE_FORM_URLENCODED)) {
-	if(!strcasecmp(content_type,"text/plain")) {
+	if(!strncasecmp(content_type,"text/plain",10)) {
 		// read the entire content to memory
 
 		todo=content_len;
@@ -92,6 +95,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			aux+=i; todo-=i;
 			}
 		content[content_len]=0;
+		//puts(content);
 
 		/////////////////////////////////////// check the secret
 		aux=strstr(content,"secret=");
@@ -117,7 +121,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		char cwd[B_SIZE];
-		aux1=cwd; aux+=4; while(*aux!='\r') {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+		aux1=cwd; aux+=4; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 
 		if(!*cwd) {strcpy(cwd, default_cwd); strcpy(action,"list"); }
 		if(strncmp(root_folder,cwd,strlen(root_folder))) { strcpy(cwd, default_cwd); strcpy(action,"list");}
@@ -142,12 +146,11 @@ void processPOSTfilemanager(int sock, char *request_line) {
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		char object[B_SIZE];
-		aux1=object; aux+=7; while(*aux && *aux!='\r') {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+		aux1=object; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 
 
 		/// If object not provided don't do anything bellow this and return the list
 		if(!*object) { free(content); sendListResponse(sock, cwd); return; }
-
 
 		////////////////////////////////////////////// UPLOAD FROM URL (wget)
 
@@ -155,8 +158,6 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			sprintf(line,"%s -N -P \"%s\" \"%s\"",wget_command,cwd,object);
 			system(line);
 			sendListResponse(sock, cwd); return; }
-
-
 
 		////////////////////////////////////////////// CD
 
@@ -169,7 +170,6 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			}
 
 			sendListResponse(sock, line); return; }
-
 
 		////////////////// for other commands the slash is not allowed in the object name - REMOVE SLASHES FROM OBJECT
 		
@@ -267,7 +267,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			sendTextFileEditorResponse(sock, cwd, object); return; }
 
 
-		////////////////////////////////////////////// VIEW / EDIT TEXT FILE - SAVE FILE (TODO)
+		////////////////////////////////////////////// VIEW / EDIT TEXT FILE - SAVE FILE
 
 		if(!strncmp(action,"viewedit-save",13)) {
 			aux=strstr(content,"usertext=");
@@ -277,8 +277,6 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			FILE *f=fopen(line,"w");
 			aux=aux+9;
 
-			// issue: one initial newline is being removed in each save - TODO trying to find why !!!
-			
 			content[content_len-2]=0; // the last CR+LF is not part of the textarea field, so remove the last two bytes
 			while(*aux) {
 				fwrite(aux,1,1,f);
@@ -290,6 +288,23 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			else sendTextFileEditorResponse(sock, cwd, object);
 			return;
 		}
+
+
+		////////////////////////////////////////////// VIEW / EDIT TEXT FILE - LOAD FILE (CALLED BY AN AJAX FUNCTION AT THE FRONTEND)
+
+		// this simply returns the content of the file
+		if(!strcmp(action,"viewedit-load")) {
+			free(content);
+			if(strcmp(cwd,"/")) sprintf(filename,"%s/%s",cwd,object); else sprintf(filename,"/%s",object);
+			f=fopen(filename,"r");
+			sendHttpFileContent(sock, f, "200 Ok", "text/html");
+			fclose(f); return;
+		}
+
+
+
+
+
 
 
 
@@ -304,7 +319,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		char object2[B_SIZE];
-		aux1=object2; aux+=8; while(*aux && *aux!='\r') {*aux1=*aux; aux1++; aux++;}; *aux1=0;
+		aux1=object2; aux+=8; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 
 
 		/// If object2 not provided don't do anything bellow this and return the list
@@ -368,16 +383,11 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			sendDetailsResponse(sock, cwd, object); return;
 		}
 
-
-
 		////////////////////
 
-		/* puts(action);
-		puts(object);
-		puts(object2);
-		puts(cwd); */
 
-
+		sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete or inconsistent POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line);
 		free(content);
 		} // END CONTENT-TYPE PLAIN/TEXT
 		  //
@@ -402,7 +412,6 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 
 	/// SEND DETAILS / PROPERTIES RESPONSE
-	///////////// TODO: view/edit
 	//
 
 void sendDetailsResponse(int sock, char *cwd, char *obj) {
@@ -456,7 +465,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 				linkTarget[l_size]=0;
 				struct stat prop;
 				chdir(cwd);
-				if(stat(linkTarget,&prop)) sprintf(aux,"Symbolic link> (<b>%s</b> &rarr; <font color=red><b>%s</b></font>)", obj, linkTarget);
+				if(stat(linkTarget,&prop)) sprintf(aux,"Symbolic link (<b>%s</b> &rarr; <font color=red><b>%s</b></font>)", obj, linkTarget);
 				else sprintf(aux,"Symbolic link (<b>%s</b> &rarr; <font color=green><b>%s</b></font>)", obj, linkTarget); 
 			break;
 			case S_IFREG:	sprintf(aux, "Regular file with %li bytes",sb.st_size); isFile=1; break;
@@ -708,22 +717,14 @@ void sendListResponse(int sock, char *cwd) {
 	strcpy(aux,"</table></details></tr></table></p><hr>");
 
 
-
-
-
-
-
-
-
-
 	// Add to the list the current folder listing contents
 	d=opendir(cwd);
-	printf("Listing folder %s\n",cwd);
+	//printf("Listing folder %s\n",cwd);
 	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",HTML_HEADER,cwd,HTML_BODY_FOOTER);
 			           fclose(tmpFile); sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
 	
 	// add ../ for cdup
-	if(strcmp(cwd,root_folder)) strcat(list,"<p><a href=\"javascript:act('cdup','','');\"><b> ../ <i>(parent folder)</i></b></a></li>");
+	if(strcmp(cwd,root_folder)) strcat(aux,"<p><a href=\"javascript:act('cdup','','');\"><b> ../ <i><big>(parent folder)</big></i></b></a></li>");
 
 	fwrite(list,1,strlen(list),tmpFile);
 
@@ -742,7 +743,6 @@ void sendListResponse(int sock, char *cwd) {
 
 			if(e->d_type==DT_DIR) sprintf(aux,"<a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>",e->d_name,e->d_name);
 			else if(e->d_type== DT_LNK) {
-				// TODO: haldle the sym link case
 				char fullName[B_SIZE], linkTarget[B_SIZE];
 				sprintf(fullName,"%s/%s",cwd,e->d_name);\
 				int l_size=readlink(fullName, linkTarget, B_SIZE);
@@ -766,7 +766,7 @@ void sendListResponse(int sock, char *cwd) {
 			sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"Properties\" onClick=\"javascript:act('details','%s','');\"></td>", e->d_name);
 
 			//
-			// VIEW-EDIT TODO - TODO view and edit file content (if it's text)
+			// VIEW-EDIT - view and edit file content (if it's text)
 			aux=aux+strlen(aux);
 			if(e->d_type==DT_REG) sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"View/Edit\" onClick=\"javascript:act('viewedit','%s','');\"></td>",
 					e->d_name);
@@ -938,7 +938,7 @@ void processMultipartPost(int sock, long content_len, char *bound) {
 void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 	char list[10*B_SIZE];
 	char filename[B_SIZE];
-	int done, col, c, fileMaxContent=6*B_SIZE;
+	int col, c, fileMaxContent=6*B_SIZE;
 	char isText;
 	unsigned char fileContent[fileMaxContent+1];
 	FILE *f, *tmpFile=tmpfile();
@@ -967,7 +967,6 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 				case 9: // TAB
 					break;
 				default:
-					//printf("Bad caracter: %u\n",fileContent[c]);
 					isText=0; fileContent[c]=32;
 				}
 		}
@@ -980,27 +979,25 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 
 	if(isText) {
 		sprintf(list,"<p><table border=0 cellspacing=3><tr><td align=center valign=top style=\"width:400px\"><details><summary>CLOSE</summary> \
-				<p><input type=button value=\" LOSE CHANGES AND CLOSE \" onclick=\"act('list','','');\"> &nbsp; \
-				<input type=button value=\" SAVE AND CLOSE \" onclick=\"act('viewedit-save-close','%s','');\"></details></p></td> \
-				<td align=center valign=top style=\"width:300px\"><details><summary>SAVE / SAVE AS</summary> \
-				<p><input id=saveasname type=text value='%s' size=30'></p><p><input type=button value=\" SAVE \" onclick=\"act('viewedit-save',document.getElementById('saveasname').value,'');\"></p> \
-				</details></td></table> \
-				<hr><p><textarea cols=150 rows=40 name=usertext>", obj, obj);
+	<p><input type=button value=\" LOSE CHANGES AND CLOSE \" onclick=\"act('list','','');\"> &nbsp; \
+	<input type=button value=\" SAVE AND CLOSE \" onclick=\"act('viewedit-save-close','%s','');\"></details></p></td> \
+	<td align=center valign=top style=\"width:300px\"><details><summary>SAVE / SAVE AS</summary> \
+	<p><input id=saveasname type=text value='%s' size=30'></p><p><input type=button value=\" SAVE \" onclick=\"act('viewedit-save',document.getElementById('saveasname').value,'');\"></p> \
+	</details></td></table><hr><p><textarea cols=150 rows=40 name=usertext id=ustx \
+	onkeydown=\"if(event.keyCode===9){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0,s)+'\t'+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}\">",
+			obj, obj);
 
 		fwrite(list,1,strlen(list),tmpFile);
 
-		f=fopen(filename,"r"); // read the file content into the textarea - TODO: issue if the file contains the </textarea> html tag
-		do {
-			done=fread(fileContent,1,B_SIZE,f);
-			if(done) fwrite(fileContent,1,done,tmpFile);
-		}
-		while(done);
-		fclose(f);
-		strcpy(list,"</textarea></form>");
+		// instead of reading the file into the page being returned to the browser, use an ajax call to load the content into the textarea after the page being loaded
+		// this avoids issues when the content includes HTML tags, like for instance </textarea>
+		
+		sprintf(list,"</textarea></form><script>var req=new XMLHttpRequest(); req.onload=function() {document.getElementById('ustx').innerHTML=this.responseText;}; req.open('POST','/filemanager',true); \
+				req.send('secret=%s\\naction=viewedit-load\\ncwd=%s\\nobject=%s\\n');</script>",access_secret,cwd,obj);
 	}
 	else {
 		sprintf(list,"</form><p><input type=button value=\" CLOSE \" onclick=\"act('list','','');\"></p><hr><h3>Sorry, this is <u>NOT A TEXT FILE</u>, you can't edit it with this text editor.</h3> \
-				<p>Here is a readonly view of parts of the file's content: \
+				<p>Here is a read-only view of parts of the file's content: \
 				<p><textarea cols=150 rows=40 readonly disabled>%s</textarea>", fileContent);
 	}
 	
