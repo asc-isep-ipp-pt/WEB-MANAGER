@@ -418,6 +418,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	char list[10*B_SIZE], filename[B_SIZE], *aux;
 	char commandLine[2*B_SIZE];
 	char typeDesc[B_SIZE];
+	char fullName[B_SIZE], linkTarget[B_SIZE];
 	int c, fileMaxContent=6*B_SIZE;
 	char isText, isFile;
 	unsigned char fileContent[fileMaxContent+1];
@@ -459,7 +460,6 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 			case S_IFDIR:	strcat(aux, "Directory");		break;
 			case S_IFIFO:	strcat(aux, "FIFO/Pipe");		break;
 			case S_IFLNK:
-				char fullName[B_SIZE], linkTarget[B_SIZE];
 				sprintf(fullName,"%s/%s",cwd,obj);
 				int l_size=readlink(fullName, linkTarget, B_SIZE);
 				linkTarget[l_size]=0;
@@ -721,8 +721,16 @@ void sendListResponse(int sock, char *cwd) {
 	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",HTML_HEADER,cwd,HTML_BODY_FOOTER);
 			           fclose(tmpFile); sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
 	
-	// add ../ for cdup
-	if(strcmp(cwd,root_folder)) strcat(aux,"<p><a href=\"javascript:act('cdup','','');\"><b> ../ <i><big>(parent folder)</big></i></b></a></li>");
+	// CD - navigation
+	
+	aux=aux+strlen(aux);
+	strcpy(aux,"<p><input type=button value=\"/root\" onClick=\"javascript:act('cd','/root','');\"> &nbsp; <input type=button value=\"/etc\" onClick=\"javascript:act('cd','/etc','');\"> &nbsp; \
+			<input type=button value=\"/var\" onClick=\"javascript:act('cd','/var','');\"> &nbsp;");
+
+	if(strcmp(cwd,root_folder)) {
+		strcat(aux,"<input type=button value=\"../ (parent folder)\" onClick=\"javascript:act('cdup','','');\"> &nbsp;\
+			<input type=button value=\"/ (filesystem's root)\" onClick=\"javascript:act('cd','/','');\">");
+	}
 
 	fwrite(list,1,strlen(list),tmpFile);
 
