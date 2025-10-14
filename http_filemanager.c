@@ -431,9 +431,9 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Properties/details about</i> [<b>%s</b>]</font> \
+		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Properties/details about</i> [<b>%s</b>]</font><br><small>%s</small> \
 		<p><input type=button value=\" CLOSE \" onclick=\"act('list','','');\"></p><hr> \
-		",html_header,access_secret,cwd,filename);
+		",html_header,access_secret,cwd,filename,title);
 
 	aux=list+strlen(list);
 
@@ -954,8 +954,8 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'> \
-		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>View/Edit file</i> [<b>%s</b>]</font> \
-		",html_header,access_secret,cwd,filename);
+		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>View/Edit file</i> [<b>%s</b>]</font><br><small>%s</small> \
+		",html_header,access_secret,cwd,filename,title);
 	fwrite(list,1,strlen(list),tmpFile);
 
 	// probe the file to check if it's text
