@@ -279,7 +279,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 			content[content_len-2]=0; // the last CR+LF is not part of the textarea field, so remove the last two bytes
 			while(*aux) {
-				fwrite(aux,1,1,f);
+				if(*aux!='\r') fwrite(aux,1,1,f); // remove CRs (always save in Unix mode)
 				aux++;
 				}
 			fclose(f);
