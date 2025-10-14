@@ -37,7 +37,7 @@ void processGETfilemanager(int sock, char *requestLine) {
         while(*aux!=32) {aux++;} *aux=0;
 	// The URI's last element is the access secret
 	if(strcmp(uri,access_secret)) {
-		sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",html_header,HTML_BODY_FOOTER);
 		sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line);
 		puts("Oops, not authorized.");
 		}
@@ -45,7 +45,7 @@ void processGETfilemanager(int sock, char *requestLine) {
                 sprintf(line,"%s<body bgcolor=gray onLoad=\"act('list','','')\"> \
 			<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value=\"%s\"> \
 			<input type=hidden name=action value=list><input type=hidden name=object value=> \
-			<input type=hidden name=object2 value=><input type=hidden name=cwd value=></form>%s",HTML_HEADER,access_secret,HTML_BODY_FOOTER);
+			<input type=hidden name=object2 value=><input type=hidden name=cwd value=></form>%s",html_header,access_secret,HTML_BODY_FOOTER);
 		sendHttpStringResponse(sock, "200 Ok", "text/html", line);
 		}
 }
@@ -99,17 +99,17 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		/////////////////////////////////////// check the secret
 		aux=strstr(content,"secret=");
-		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		aux1=line; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 		
-		if(strcmp(line,access_secret)) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		if(strcmp(line,access_secret)) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",html_header,HTML_BODY_FOOTER);
 							sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		/////////////////////////////////////// get the action
 		aux=strstr(content,"action=");
-		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		char action[B_SIZE];
@@ -117,7 +117,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		/////////////////////////////////////// get the cwd
 		aux=strstr(content,"cwd=");
-		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		char cwd[B_SIZE];
@@ -142,7 +142,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		
 		/////////////////////////////////////// Get the object value
 		aux=strstr(content,"object=");
-		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		char object[B_SIZE];
@@ -271,7 +271,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		if(!strncmp(action,"viewedit-save",13)) {
 			aux=strstr(content,"usertext=");
-			if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+			if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 			sprintf(line,"%s/%s",cwd,object);
 			FILE *f=fopen(line,"w");
@@ -315,7 +315,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		/////////////////////////////////////// Get "object2" for actions that require "object2"
 		//
 		aux=strstr(content,"object2=");
-		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		if(!aux) { sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete POST data.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line); free(content); return; }
 
 		char object2[B_SIZE];
@@ -386,7 +386,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		////////////////////
 
 
-		sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete or inconsistent POST data.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+		sprintf(line,"%s<body bgcolor=yellow><h1>Sorry, access denied due to incomplete or inconsistent POST data.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", line);
 		free(content);
 		} // END CONTENT-TYPE PLAIN/TEXT
@@ -433,7 +433,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
 		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Properties/details about</i> [<b>%s</b>]</font> \
 		<p><input type=button value=\" CLOSE \" onclick=\"act('list','','');\"></p><hr> \
-		",HTML_HEADER,access_secret,cwd,filename);
+		",html_header,access_secret,cwd,filename);
 
 	aux=list+strlen(list);
 
@@ -642,12 +642,12 @@ void sendListResponse(int sock, char *cwd) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		       <form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		       <input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		       <p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Directory content listing for</i> [<b>%s</b>]</font> \
+		       <p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Directory content listing for</i> [<b>%s</b>]</font><br><small>(%s)</small> \
 		       <p><table width=100%% border=0 cellspacing=3><tr> \
 		       <td align=center valign=top style=\"width:250px\"><details><summary>CREATE</summary><p><input id=mkobjname type=text> \
 		       <p><input type=button value=\"FOLDER\" onclick=\"act('mkdir',document.getElementById('mkobjname').value,'');\"> \
 		       <input type=button value=\" FILE \" onclick=\"act('mkfile',document.getElementById('mkobjname').value,'');\"></p></details</td> \
-		       <td></td>",HTML_HEADER,access_secret,cwd,cwd);
+		       <td></td>",html_header,access_secret,cwd,cwd,title);
 
 	strcat(list,"<td align=center valign=top style=\"width:450px\"><details><summary>Upload file from URL (wget)</summary><p>");
 	if(wget_command) {
@@ -718,7 +718,7 @@ void sendListResponse(int sock, char *cwd) {
 	// Add to the list the current folder listing contents
 	d=opendir(cwd);
 	//printf("Listing folder %s\n",cwd);
-	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",HTML_HEADER,cwd,HTML_BODY_FOOTER);
+	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",html_header,cwd,HTML_BODY_FOOTER);
 			           fclose(tmpFile); sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
 	
 	// CD - navigation
@@ -881,7 +881,7 @@ void processMultipartPost(int sock, long content_len, char *bound) {
 			readLineCRLF(sock,buffer); todo=todo-2-strlen(buffer);
 			if(strcmp(buffer,access_secret)) {
 				//puts("Bad secret");
-				sprintf(buffer,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sprintf(buffer,"%s<body bgcolor=yellow><h1>Sorry, access denied.</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "401 Unauthorized", "text/html", buffer); return;
 			}
 			authorized=1;
@@ -955,7 +955,7 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'> \
 		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>View/Edit file</i> [<b>%s</b>]</font> \
-		",HTML_HEADER,access_secret,cwd,filename);
+		",html_header,access_secret,cwd,filename);
 	fwrite(list,1,strlen(list),tmpFile);
 
 	// probe the file to check if it's text

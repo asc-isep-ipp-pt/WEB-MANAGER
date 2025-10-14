@@ -4,12 +4,12 @@
 
 #define BASE_FOLDER "www"
 
-#define HTML_BODY_FOOTER "<footer><hr><small>Ultra Basic Web Manager version 0.2, September 2025<br><i>Andr&eacute; Moreira (asc@isep.ipp.pt)</i></small></footer></body></html>"
+#define HTML_BODY_FOOTER "<footer><hr><small>Ultra Basic Web Manager version 0.2, September 2025<br><i>André Moreira (asc@isep.ipp.pt)</i></small></footer></body></html>"
 
-#define HTML_HEADER "<html><head> <meta charset=\"UTF-8\"><title>Web Manager</title><script>function act(a,o,o2){document.main.action.value=a;document.main.object.value=o;document.main.object2.value=o2;document.main.submit();} \
+#define HTML_HEADER_TEMPLATE "<html><head> <meta charset=\"UTF-8\"><title>%s</title><script>function act(a,o,o2){document.main.action.value=a;document.main.object.value=o;document.main.object2.value=o2;document.main.submit();} \
 	</script> \
-	<style> details > summary {  padding: 4px; background-color: #c0c0c0; width: 90%; border: none; box-shadow: 2px 2px 3px #bbbbbb; cursor: pointer; } \
-	details > p { background-color: #cfcfcf; width: 90%; padding: 4px; margin: 0; box-shadow: 2px 2px 3px #bbbbbb; } \
+	<style> details > summary {  padding: 4px; background-color: #c0c0c0; width: 90%%; border: none; box-shadow: 2px 2px 3px #bbbbbb; cursor: pointer; } \
+	details > p { background-color: #cfcfcf; width: 90%%; padding: 4px; margin: 0; box-shadow: 2px 2px 3px #bbbbbb; } \
 	</style> \
 	</head>"
 
@@ -18,6 +18,8 @@
 
 void processGET(int sock, char *requestLine);
 
+char *title="Web Manager";
+char html_header[B_SIZE];
 char *wget_command=NULL;
 char *file_command=NULL;
 char *root_folder="/";

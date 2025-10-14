@@ -18,7 +18,7 @@
 
 // read the secret from a file
 
-void usage_message(void) {printf("Possible command line options are:\n --secret-file FILE-WITH-SECRET-STRING (default is %s)\n --root-folder FOLDER (default is %s)\n --initial-cwd FOLDER (default is %s)\n --port TCP-PORT-NUMBER (default is %s)\n\n",
+void usage_message(void) {printf("Possible command line options are:\n --secret-file FILE-WITH-SECRET-STRING (default is %s)\n --root-folder FOLDER (default is %s)\n --initial-cwd FOLDER (default is %s)\n --port TCP-PORT-NUMBER (default is %s)\n --title TITLE (dafault is Web Manager)\n\n",
 		secret_file,root_folder,default_cwd,port_number);exit(1);}
 
 
@@ -46,6 +46,10 @@ int main(int argc, char **argv) {
 			c++; if(c>=argc) usage_message();
 			default_cwd=argv[c];
 		}
+		if(!strcmp(argv[c],"--title")) {
+			c++; if(c>=argc) usage_message();
+			title=argv[c];
+		}
 		if(!strcmp(argv[c],"--port")) {
 			c++; if(c>=argc) usage_message();
 			port_number=argv[c];
@@ -66,7 +70,7 @@ int main(int argc, char **argv) {
 
 	if(strncmp(root_folder,default_cwd,strlen(root_folder))) default_cwd=root_folder;
 	
-	
+	sprintf(html_header,HTML_HEADER_TEMPLATE,title);
 	
 
 	
@@ -126,7 +130,7 @@ int main(int argc, char **argv) {
 			if(!strncmp(line,"POST /filemanager",17)) processPOSTfilemanager(Nsock, line);
 			else {
 				printf("Request line not supported by this server: %s\n",line);
-				sprintf(line,"%s<body bgcolor=yellow><h1>HTTP method not supported</h1>%s",HTML_HEADER,HTML_BODY_FOOTER);
+				sprintf(line,"%s<body bgcolor=yellow><h1>HTTP method not supported</h1>%s",html_header,HTML_BODY_FOOTER);
 				sendHttpStringResponse(sock, "405 Method Not Allowed", "text/html", line);
 			}
                 	close(Nsock);
