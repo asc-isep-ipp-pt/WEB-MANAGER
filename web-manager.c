@@ -13,12 +13,13 @@
 #include "http.h"
 #include "http_filemanager.c"
 #include "web-manager.h"
+#include "killall.c"
 
 
 
 // read the secret from a file
 
-void usage_message(void) {printf("Possible command line options are:\n --secret-file FILE-WITH-SECRET-STRING (default is %s)\n --root-folder FOLDER (default is %s)\n --initial-cwd FOLDER (default is %s)\n --port TCP-PORT-NUMBER (default is %s)\n --title TITLE (dafault is Web Manager)\n\n",
+void usage_message(void) {printf("Optional command line options are:\n --secret-file FILE-WITH-SECRET-STRING (default is %s)\n --root-folder FOLDER (default is %s)\n --initial-cwd FOLDER (default is %s)\n --port TCP-PORT-NUMBER (default is %s)\n --title TITLE (default is \"Web Manager\")\n --killall\n\n",
 		secret_file,root_folder,default_cwd,port_number);exit(1);}
 
 
@@ -38,22 +39,33 @@ int main(int argc, char **argv) {
 			c++; if(c>=argc) usage_message();
 			secret_file=argv[c];
 		}
+		else
 		if(!strcmp(argv[c],"--root-folder")) {
 			c++; if(c>=argc) usage_message();
 			root_folder=argv[c];
 		}
+		else
 		if(!strcmp(argv[c],"--initial-cwd")) {
 			c++; if(c>=argc) usage_message();
 			default_cwd=argv[c];
 		}
+		else
 		if(!strcmp(argv[c],"--title")) {
 			c++; if(c>=argc) usage_message();
 			title=argv[c];
 		}
+		else
 		if(!strcmp(argv[c],"--port")) {
 			c++; if(c>=argc) usage_message();
 			port_number=argv[c];
 		}
+		else
+		if(!strcmp(argv[c],"--killall")) {
+			web_manager_kill_all();
+			exit(0);
+		}
+		else
+			usage_message();
 		c++;
 		
 	}
