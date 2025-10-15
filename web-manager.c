@@ -84,7 +84,8 @@ int main(int argc, char **argv) {
 	
 	sprintf(html_header,HTML_HEADER_TEMPLATE,title);
 	
-
+	// leave the child to do the job and exit
+	if(fork()) exit(0);
 	
 
 	bzero((char *)&req,sizeof(req));
