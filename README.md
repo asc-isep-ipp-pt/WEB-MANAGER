@@ -1,4 +1,4 @@
-![](favicon.ico)
+[](favicon.ico)
 # WEB-MANAGER
 This project aims to create a monolithic web server allowing remote management operations over the Linux server where it is running.
 - The service runs as root; this means it has full access to the server, including its filesystem.
@@ -19,7 +19,12 @@ Possible command line options are:
  
  --port TCP-PORT-NUMBER (default is 2229)
 
- --title TITLE (default is Web Manager)
+ --title TITLE (default is "Web Manager")
 
  --killall
+ 
+The TITLE is used for the HTML title tag, and is presented in some pages content as well.
+ 
+With the "--killall" command line option, instead of starting the server, the application finds every process with the same name (web-manager) and sends to it the TERM signal (except for the calling process itself).
+ 
  

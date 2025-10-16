@@ -123,10 +123,11 @@ int main(int argc, char **argv) {
 	if(!file_command && !access("/usr/local/bin/file",X_OK)) file_command="/usr/local/bin/file";
 
 
-	// create the clipboard folder
+	// create the clipboard folder (if it doesn't exist)
 	mkdir(clipboard_folder,0700);
 
-
+	// create the settings folder (if it doesn't exist)
+	mkdir(settings_folder,0700);
 
 	listen(sock,SOMAXCONN);
 	adl=sizeof(from);
@@ -153,6 +154,58 @@ int main(int argc, char **argv) {
         	}
 	close(sock);
 	}
+
+
+
+void readCommandLinesFromSettings(void) {
+	FILE *f;
+	char line[B_SIZE];
+	int n=0;
+
+	for(n=0;n<MAX_COMMAND_LINES;n++) commandLine[n][0]=0;
+	sprintf(line,"%s/%s", settings_folder, commandLinesFile);
+	f=fopen(line,"r");
+	if(!f) return;
+	n=0; while(fgets(commandLine[n],B_SIZE,f)) {commandLine[n][strlen(commandLine[n])-1]=0; n++; if(n>=MAX_COMMAND_LINES) break;}
+	fclose(f);
+}
+
+
+
+void updateCommandLine(int nl, char *commLine) {
+	FILE *f;
+	char line[B_SIZE];
+	int n=0;
+	
+	readCommandLinesFromSettings();
+	if(!strcmp(commLine,commandLine[nl])) return;
+	strcpy(commandLine[nl],commLine);
+	sprintf(line,"%s/%s", settings_folder, commandLinesFile);
+	f=fopen(line,"w");
+	for(n=0;n<MAX_COMMAND_LINES;n++) fprintf(f,"%s\n",commandLine[n]);
+	fclose(f);
+}
+
+
+void appendCommandsExecutionHTML(char *buff, int count) {
+	int n;
+	char *aux;
+
+	if(count>MAX_COMMAND_LINES) count=MAX_COMMAND_LINES;
+	aux=buff;
+	n=0; while(n<count) {
+		n++;
+		sprintf(aux,"<p><input id=comm%i value=\"%s\" type=text size=60>&nbsp;<input type=button value=\" RUN \" onclick=\"execComm(document.getElementById('comm%i').value,%i);\"></p>",n, commandLine[n-1],n,n);
+		aux=aux+strlen(aux);
+	}
+}
+
+
+
+
+
+
+
 
 
 

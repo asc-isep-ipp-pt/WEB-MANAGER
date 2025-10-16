@@ -19,7 +19,7 @@
 
 
 
-// Only the first request is a GET, following requests are POSTs
+// Only the first request is a GET; the following requests are POSTs
 // If the access secret is ok, the GET is redirected to a POST
 // The requestLine format is GET /filemanager/{SECRET}
 //
@@ -149,10 +149,38 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		aux1=object; aux+=7; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 
 
-		/// If object not provided don't do anything bellow this and return the list
+
+		////////////////////////////////////////////////////////////////////// EXECUTE COMMAND
+		///////// Ajax call from the frontend (object is a command line)
+
+		if(!strcmp(action,"exec-comm")) { 
+			aux=strstr(content,"comm_n=");
+			if(aux) {
+				aux=aux+7; aux1=aux; while(*aux1>32) aux1++;
+				*aux1=0;
+				int ndx=atoi(aux);
+				if(ndx) updateCommandLine(ndx-1,object);
+			}
+			free(content);
+			if(*object) {
+				chdir(cwd);
+				f=popen(object,"r");
+				aux=line; *aux=0;
+				while(fgets(aux,B_SIZE,f)) aux=aux+strlen(aux);
+				pclose(f);
+			} else *line=0;
+			sendHttpStringResponse(sock, "200 Ok", "text/plain", line);
+			return;
+			}
+
+
+
+
+		/// For the following cases, the object is required to be filled; by default, return the list
 		if(!*object) { free(content); sendListResponse(sock, cwd); return; }
 
 		////////////////////////////////////////////// UPLOAD FROM URL (wget)
+		/// COULD BE: implement own code to download a file from a URL (must handle HTTPS as well)
 
 		if(!strcmp(action,"wget")) { free(content); 
 			sprintf(line,"%s -N -P \"%s\" \"%s\"",wget_command,cwd,object);
@@ -171,7 +199,14 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 			sendListResponse(sock, line); return; }
 
-		////////////////// for other commands the slash is not allowed in the object name - REMOVE SLASHES FROM OBJECT
+
+		
+
+
+
+
+
+		////////////////// for other commands, the slash is not allowed in the object name - REMOVE SLASHES FROM OBJECT
 		
 		aux=object;
 		while(*aux) {
@@ -235,7 +270,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		if(!strncmp(action,"pasteclip",9)) {
 			free(content); 
 			if(!strcmp(action,"pasteclipALL")) {
-				d=opendir(clipboard_folder);  // this approach avoids issueis when copying all objects starting with a dot (the issue is .. will be included)
+				d=opendir(clipboard_folder);  // this approach avoids issues when copying all objects starting with a dot (the issue is .. will be included)
 				e=readdir(d);
 				while(e) {
 					 if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
@@ -297,13 +332,9 @@ void processPOSTfilemanager(int sock, char *request_line) {
 			free(content);
 			if(strcmp(cwd,"/")) sprintf(filename,"%s/%s",cwd,object); else sprintf(filename,"/%s",object);
 			f=fopen(filename,"r");
-			sendHttpFileContent(sock, f, "200 Ok", "text/html");
+			sendHttpFileContent(sock, f, "200 Ok", "text/plain");
 			fclose(f); return;
 		}
-
-
-
-
 
 
 
@@ -322,7 +353,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 		aux1=object2; aux+=8; while(*aux>31) {*aux1=*aux; aux1++; aux++;}; *aux1=0;
 
 
-		/// If object2 not provided don't do anything bellow this and return the list
+		/// If object2 is not provided, don't do anything bellow this and return the list
 		if(!*object2) { free(content); sendListResponse(sock, cwd); return; }
 
 
@@ -431,7 +462,7 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Properties/details about</i> [<b>%s</b>]</font><br><small>%s</small> \
+		<p><img src=/favicon.ico width=32 height=32><font size=6>   <i>Properties/details about</i> [<b>%s</b>]</font><br><small>%s</small> \
 		<p><input type=button value=\" CLOSE \" onclick=\"act('list','','');\"></p><hr> \
 		",html_header,access_secret,cwd,filename,title);
 
@@ -465,8 +496,8 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 				linkTarget[l_size]=0;
 				struct stat prop;
 				chdir(cwd);
-				if(stat(linkTarget,&prop)) sprintf(aux,"Symbolic link (<b>%s</b> &rarr; <font color=red><b>%s</b></font>)", obj, linkTarget);
-				else sprintf(aux,"Symbolic link (<b>%s</b> &rarr; <font color=green><b>%s</b></font>)", obj, linkTarget); 
+				if(stat(linkTarget,&prop)) sprintf(aux,"Symbolic link (<b>%s</b> → <font color=red><b>%s</b></font>)", obj, linkTarget);
+				else sprintf(aux,"Symbolic link (<b>%s</b> → <font color=green><b>%s</b></font>)", obj, linkTarget); 
 			break;
 			case S_IFREG:	sprintf(aux, "Regular file with %li bytes",sb.st_size); isFile=1; break;
 			case S_IFSOCK:	strcat(aux, "Socket");		break;
@@ -642,14 +673,25 @@ void sendListResponse(int sock, char *cwd) {
 	sprintf(list,"%s<body bgcolor=gray> \
 		       <form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		       <input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'></form> \
-		       <p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>Directory content listing for</i> [<b>%s</b>]</font><br><small>(%s)</small> \
+		       <p><img src=/favicon.ico width=32 height=32><font size=6>   <i>Directory content listing for</i> [<b>%s</b>]</font><br><small>(%s)</small> \
 		       <p><table width=100%% border=0 cellspacing=3><tr> \
 		       <td align=center valign=top style=\"width:250px\"><details><summary>CREATE</summary><p><input id=mkobjname type=text> \
 		       <p><input type=button value=\"FOLDER\" onclick=\"act('mkdir',document.getElementById('mkobjname').value,'');\"> \
 		       <input type=button value=\" FILE \" onclick=\"act('mkfile',document.getElementById('mkobjname').value,'');\"></p></details</td> \
 		       <td></td>",html_header,access_secret,cwd,cwd,title);
 
-	strcat(list,"<td align=center valign=top style=\"width:450px\"><details><summary>Upload file from URL (wget)</summary><p>");
+	fwrite(list,1,strlen(list),tmpFile);
+
+	strcpy(list,"<td align=center valign=top style=\"width:600px\"><details><summary>Execute command line</summary>");
+	aux=list+strlen(list);
+	readCommandLinesFromSettings();
+	appendCommandsExecutionHTML(aux,7);
+	aux=aux+strlen(aux);
+	strcpy(aux,"<p><textarea cols=70 rows=10 disabled readonly id=commout style=\"resize:none\">Command line execution result (stdout). To see stderr as well, redirect it to stdout (append 2>&1 to the command line).</textarea></details></td>");
+
+	fwrite(list,1,strlen(list),tmpFile);
+
+	strcpy(list,"<td align=center valign=top style=\"width:400px\"><details><summary>Upload file from URL (wget)</summary><p>");
 	if(wget_command) {
 		strcat(list,"<input id=urlwget type=url name=urlwget size=50> \
 			<p><input type=button value=\"DOWNLOAD\" onclick=\"act('wget',document.getElementById('urlwget').value,'');\"></p></details></td>");
@@ -658,9 +700,6 @@ void sendListResponse(int sock, char *cwd) {
 		strcat(list,"Sorry, the wget command is not available</p></details></td>");
 	}
 
-
-	// Upload files from browser
-	//
 	aux=list+strlen(list);
 
 	sprintf(aux,"<script> \
@@ -671,10 +710,16 @@ void sendListResponse(int sock, char *cwd) {
 			visibility = (visibility === 'visible') ? 'hidden' : 'visible'; }, 300); } \
 			</script>");
 	aux=aux+strlen(aux);
+	sprintf(aux,"<script>function execComm(comm, nn) { var e=new XMLHttpRequest(); e.onload=function() {document.getElementById('commout').innerHTML=this.responseText;}; \
+			e.open('POST','/filemanager', true); e.send('secret=%s\\naction=exec-comm\\ncwd=%s\\nobject=' + comm + '\\ncomm_n=' + nn + '\\n'); };</script>",access_secret,cwd);
+	aux=aux+strlen(aux);
+
+	// Upload files from browser
+	//
 	sprintf(aux,"<td align=center valign=top style=\"width:300px\"><details><summary>Upload files from browser</summary> \
 			<table width=90%% border=0><tr><td style=\"width:300px\" bgcolor=#cfcfcf align=center valign=center> \
 			<br><form name=upload enctype=multipart/form-data method=POST id=upF action=/filemanager><input type=hidden name=secret value=\"%s\"><input type=hidden name=action value=upload> \
-			<input type=hidden name=cwd value=\"%s\">&nbsp;<input type=file name=filename multiple onchange=uploadfiles()> \
+			<input type=hidden name=cwd value=\"%s\"> <input type=file name=filename multiple onchange=uploadfiles()> \
 			</form><div id=msg></div></td></tr></table></details></td>", access_secret, cwd);
 
 
@@ -697,9 +742,9 @@ void sendListResponse(int sock, char *cwd) {
 	while(e) {
 		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
 			sprintf(aux,"<tr><td align=center style=\"width:200px\" style=\"vertical-align:middle\"><small><b>%s", e->d_name);
-			if(e->d_type==DT_DIR) strcat(aux,"/"); else if(e->d_type==DT_LNK) strcat(aux," &rarr;");
+			if(e->d_type==DT_DIR) strcat(aux,"/"); else if(e->d_type==DT_LNK) strcat(aux," →");
 			aux=aux+strlen(aux);
-			sprintf(aux,"</b></small></td><td align=center style=\"width:200px\"><input type=button value=\"PASTE\" onclick=\"act('pasteclip','%s','');\"> &nbsp; \
+			sprintf(aux,"</b></small></td><td align=center style=\"width:200px\"><input type=button value=\"PASTE\" onclick=\"act('pasteclip','%s','');\">   \
 					<input type=button value=\"DELETE\" onclick=\"act('deleteclip','%s','');\"></td></tr>", e->d_name, e->d_name);
 			aux=aux+strlen(aux);
 			i++;
@@ -708,8 +753,8 @@ void sendListResponse(int sock, char *cwd) {
 	}
 	closedir(d);
 	if(i>1) {
-		strcpy(aux,"<tr><td colspan=2 align=center><hr><input type=button value=\"PASTE ALL\" onclick=\"act('pasteclipALL','all','');\">&nbsp; \
-			         &nbsp; <input type=button value=\"DELETE ALL\" onclick=\"act('deleteclipALL','all','');\"></td></tr>");
+		strcpy(aux,"<tr><td colspan=2 align=center><hr><input type=button value=\"PASTE ALL\" onclick=\"act('pasteclipALL','all','');\">  \
+			           <input type=button value=\"DELETE ALL\" onclick=\"act('deleteclipALL','all','');\"></td></tr>");
 		aux=aux+strlen(aux);
 	}
 	strcpy(aux,"</table></details></tr></table></p><hr>");
@@ -724,11 +769,11 @@ void sendListResponse(int sock, char *cwd) {
 	// CD - navigation
 	
 	aux=aux+strlen(aux);
-	strcpy(aux,"<p><input type=button value=\"/root\" onClick=\"javascript:act('cd','/root','');\"> &nbsp; <input type=button value=\"/etc\" onClick=\"javascript:act('cd','/etc','');\"> &nbsp; \
-			<input type=button value=\"/var\" onClick=\"javascript:act('cd','/var','');\"> &nbsp;");
+	strcpy(aux,"<p><input type=button value=\"/root\" onClick=\"javascript:act('cd','/root','');\">   <input type=button value=\"/etc\" onClick=\"javascript:act('cd','/etc','');\">   \
+			<input type=button value=\"/var\" onClick=\"javascript:act('cd','/var','');\">  ");
 
 	if(strcmp(cwd,root_folder)) {
-		strcat(aux,"<input type=button value=\"../ (parent folder)\" onClick=\"javascript:act('cdup','','');\"> &nbsp;\
+		strcat(aux,"<input type=button value=\"../ (parent folder)\" onClick=\"javascript:act('cdup','','');\">  \
 			<input type=button value=\"/ (filesystem's root)\" onClick=\"javascript:act('cd','/','');\">");
 	}
 
@@ -743,7 +788,7 @@ void sendListResponse(int sock, char *cwd) {
 		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
 			elem++;
 			aux=list;
-			strcpy(aux,"<p><details><summary>&nbsp;&nbsp;&nbsp;&nbsp;");
+			strcpy(aux,"<p><details><summary>    ");
 			// if a folder, permit cd into it
 			aux=aux+strlen(aux);
 
@@ -755,10 +800,10 @@ void sendListResponse(int sock, char *cwd) {
 				linkTarget[l_size]=0;
 				struct stat prop;
 				chdir(cwd);
-				if(stat(linkTarget,&prop)) sprintf(aux,"<b>%s</b> &rarr; <font color=red><b>%s</b></font>", e->d_name,linkTarget);
+				if(stat(linkTarget,&prop)) sprintf(aux,"<b>%s</b> → <font color=red><b>%s</b></font>", e->d_name,linkTarget);
 				else
-				if(S_ISDIR(prop.st_mode)) sprintf(aux,"<b>%s</b> &rarr; <a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>", e->d_name,linkTarget,linkTarget); 
-				else sprintf(aux,"<b>%s</b> &rarr; <font color=green><b>%s</b></font>", e->d_name,linkTarget); 
+				if(S_ISDIR(prop.st_mode)) sprintf(aux,"<b>%s</b> → <a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>", e->d_name,linkTarget,linkTarget); 
+				else sprintf(aux,"<b>%s</b> → <font color=green><b>%s</b></font>", e->d_name,linkTarget); 
 				
 
 
@@ -949,17 +994,19 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 	unsigned char fileContent[fileMaxContent+1];
 	FILE *f, *tmpFile=tmpfile();
 
+	readCommandLinesFromSettings();
+
 	if(strcmp(cwd,"/")) sprintf(filename,"%s/%s",cwd,obj); else sprintf(filename,"/%s",obj);
 
 	sprintf(list,"%s<body bgcolor=gray> \
 		<form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
 		<input type=hidden name=object2 value=><input type=hidden name=cwd value='%s'> \
-		<p><img src=/favicon.ico width=32 height=32><font size=6> &nbsp; <i>View/Edit file</i> [<b>%s</b>]</font><br><small>%s</small> \
+		<p><img src=/favicon.ico width=32 height=32><font size=6>   <i>View/Edit file</i> [<b>%s</b>]</font><br><small>%s</small> \
 		",html_header,access_secret,cwd,filename,title);
 	fwrite(list,1,strlen(list),tmpFile);
 
 	// probe the file to check if it's text
-	// at the same time prepare a content to be displayed in case it's not a text file
+	// at the same time, prepare content to be displayed in case it's not a text file
 	f=fopen(filename,"r"); col=0; c=0; isText=1;
 	while(fread(&fileContent[c],1,1,f)) {
 		if(fileContent[c]<32) {
@@ -985,21 +1032,32 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 
 	if(isText) {
 		sprintf(list,"<p><table border=0 cellspacing=3><tr><td align=center valign=top style=\"width:400px\"><details><summary>CLOSE</summary> \
-	<p><input type=button value=\" LOSE CHANGES AND CLOSE \" onclick=\"act('list','','');\"> &nbsp; \
+	<p><input type=button value=\" LOSE CHANGES AND CLOSE \" onclick=\"act('list','','');\">   \
 	<input type=button value=\" SAVE AND CLOSE \" onclick=\"act('viewedit-save-close','%s','');\"></details></p></td> \
 	<td align=center valign=top style=\"width:300px\"><details><summary>SAVE / SAVE AS</summary> \
 	<p><input id=saveasname type=text value='%s' size=30'></p><p><input type=button value=\" SAVE \" onclick=\"act('viewedit-save',document.getElementById('saveasname').value,'');\"></p> \
-	</details></td></table><hr><p><textarea cols=150 rows=40 name=usertext id=ustx \
-	onkeydown=\"if(event.keyCode===9){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0,s)+'\t'+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}\">",
-			obj, obj);
-
+	</details></td><td align=center valign=top style=\"width:600px\"><details><summary>Execute command line</summary>", obj, obj);
+		
+		fwrite(list,1,strlen(list),tmpFile);
+		appendCommandsExecutionHTML(list,5);
+		fwrite(list,1,strlen(list),tmpFile);
+		strcpy(list,"<p><textarea cols=70 rows=8 disabled readonly id=commout style=\"resize:none\">Command line execution result (stdout). To see stderr as well, redirect it to stdout (append 2>&1 to the command line).</textarea></details></td> \
+	</table><hr><p><textarea cols=150 rows=40 name=usertext id=ustx \
+	onkeydown=\"if(event.keyCode===9){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0,s)+'\t'+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}\">");
+			
 		fwrite(list,1,strlen(list),tmpFile);
 
-		// instead of reading the file into the page being returned to the browser, use an ajax call to load the content into the textarea after the page being loaded
+		// instead of reading the file into the page being returned to the browser, use an Ajax call to load the content into the textarea after the page is loaded
 		// this avoids issues when the content includes HTML tags, like for instance </textarea>
 		
-		sprintf(list,"</textarea></form><script>var req=new XMLHttpRequest(); req.onload=function() {document.getElementById('ustx').innerHTML=this.responseText;}; req.open('POST','/filemanager',true); \
+		sprintf(list,"</textarea></form><script>var req=new XMLHttpRequest(); req.onload=function() {document.getElementById('ustx').innerHTML=this.responseText;}; req.open('POST','/filemanager', true); \
 				req.send('secret=%s\\naction=viewedit-load\\ncwd=%s\\nobject=%s\\n');</script>",access_secret,cwd,obj);
+
+		fwrite(list,1,strlen(list),tmpFile);
+		// Ajax code for command line execution		
+		sprintf(list,"<script>function execComm(comm, nn) { var e=new XMLHttpRequest(); e.onload=function() {document.getElementById('commout').innerHTML=this.responseText;}; \
+			e.open('POST','/filemanager', true); e.send('secret=%s\\naction=exec-comm\\ncwd=%s\\nobject=' + comm + '\\ncomm_n=' + nn + '\\n'); };</script>",access_secret,cwd);
+
 	}
 	else {
 		sprintf(list,"</form><p><input type=button value=\" CLOSE \" onclick=\"act('list','','');\"></p><hr><h3>Sorry, this is <u>NOT A TEXT FILE</u>, you can't edit it with this text editor.</h3> \
