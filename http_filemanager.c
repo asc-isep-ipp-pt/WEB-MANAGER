@@ -162,14 +162,16 @@ void processPOSTfilemanager(int sock, char *request_line) {
 				if(ndx) updateCommandLine(ndx-1,object);
 			}
 			free(content);
+			FILE *tmpFile=tmpfile();
 			if(*object) {
 				chdir(cwd);
 				f=popen(object,"r");
-				aux=line; *aux=0;
-				while(fgets(aux,B_SIZE,f)) aux=aux+strlen(aux);
+				*line=0;
+				while(fgets(line,B_SIZE,f)) fputs(line,tmpFile);
 				pclose(f);
 			} else *line=0;
-			sendHttpStringResponse(sock, "200 Ok", "text/plain", line);
+			sendHttpFileContent(sock, tmpFile, "200 Ok", "text/plain");
+			fclose(tmpFile); // this also removes the temporary file
 			return;
 			}
 
@@ -658,8 +660,8 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 
 
 
-
-/// the list response  - DIRECTORY CONTENT LISTING
+///
+/// 		the list response  - DIRECTORY CONTENT LISTING
 //
 //
 
@@ -687,7 +689,7 @@ void sendListResponse(int sock, char *cwd) {
 	readCommandLinesFromSettings();
 	appendCommandsExecutionHTML(aux,7);
 	aux=aux+strlen(aux);
-	strcpy(aux,"<p><textarea cols=70 rows=10 disabled readonly id=commout style=\"resize:none\">Command line execution result (stdout). To see stderr as well, redirect it to stdout (append 2>&1 to the command line).</textarea></details></td>");
+	strcpy(aux,"<p><textarea cols=70 rows=15 disabled readonly id=commout style=\"resize:vertical\" wrap=off>Command line execution result (stdout). To see stderr as well,\nredirect it to stdout (append 2>&1 to the command line).</textarea></details></td>");
 
 	fwrite(list,1,strlen(list),tmpFile);
 
@@ -1041,7 +1043,7 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 		fwrite(list,1,strlen(list),tmpFile);
 		appendCommandsExecutionHTML(list,5);
 		fwrite(list,1,strlen(list),tmpFile);
-		strcpy(list,"<p><textarea cols=70 rows=8 disabled readonly id=commout style=\"resize:none\">Command line execution result (stdout). To see stderr as well, redirect it to stdout (append 2>&1 to the command line).</textarea></details></td> \
+		strcpy(list,"<p><textarea cols=70 rows=8 disabled readonly id=commout style=\"resize:vertical\" wrap=off>Command line execution result (stdout). To see stderr as well,\nredirect it to stdout (append 2>&1 to the command line).</textarea></details></td> \
 	</table><hr><p><textarea cols=150 rows=40 name=usertext id=ustx \
 	onkeydown=\"if(event.keyCode===9){var v=this.value,s=this.selectionStart,e=this.selectionEnd;this.value=v.substring(0,s)+'\t'+v.substring(e);this.selectionStart=this.selectionEnd=s+1;return false;}\">");
 			
