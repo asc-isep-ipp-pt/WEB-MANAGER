@@ -695,7 +695,7 @@ void sendListResponse(int sock, char *cwd) {
 
 	strcpy(list,"<td align=center valign=top style=\"width:400px\"><details><summary>Upload file from URL (wget)</summary><p>");
 	if(wget_command) {
-		strcat(list,"<input id=urlwget type=url name=urlwget size=50> \
+		strcat(list,"<input id=urlwget type=url name=urlwget size=40> \
 			<p><input type=button value=\"DOWNLOAD\" onclick=\"act('wget',document.getElementById('urlwget').value,'');\"></p></details></td>");
 	}
 	else {
@@ -1052,7 +1052,7 @@ void sendTextFileEditorResponse(int sock, char *cwd, char *obj) {
 		// instead of reading the file into the page being returned to the browser, use an Ajax call to load the content into the textarea after the page is loaded
 		// this avoids issues when the content includes HTML tags, like for instance </textarea>
 		
-		sprintf(list,"</textarea></form><script>var req=new XMLHttpRequest(); req.onload=function() {document.getElementById('ustx').innerHTML=this.responseText;}; req.open('POST','/filemanager', true); \
+		sprintf(list,"</textarea></form><script>var req=new XMLHttpRequest(); req.onload=function() {document.getElementById('ustx').value=this.responseText;}; req.open('POST','/filemanager', true); \
 				req.send('secret=%s\\naction=viewedit-load\\ncwd=%s\\nobject=%s\\n');</script>",access_secret,cwd,obj);
 
 		fwrite(list,1,strlen(list),tmpFile);
