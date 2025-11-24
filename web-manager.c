@@ -101,8 +101,11 @@ int main(int argc, char **argv) {
 	if(sock==-1) {
         	perror("Failed to open local socket"); freeaddrinfo(list); exit(1);}
 
-	err=1;
-	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &err, sizeof(int)) == -1) { perror("Failed to set SO_REUSEADDR"); close(sock); exit(1); }
+	err=1; // ENABLE SO_REUSEADDRE
+        if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &err, sizeof(int))==-1) { perror("Failed to set SO_REUSEADDR"); close(sock); exit(1); }
+
+	err=0; // DISABLE IPV6_V6ONLY
+	if(setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &err, sizeof(int))==-1) { perror("Failed to set IPV6_V6ONLY"); close(sock); exit(1); }
 
 	if(bind(sock,(struct sockaddr *)list->ai_addr, list->ai_addrlen)==-1) {
         	perror("Bind failed");close(sock);freeaddrinfo(list);exit(1);}
