@@ -8,7 +8,7 @@ void web_manager_kill_all(void) {
 	FILE *f;
 
 
-	system("mount -t proc proc /proc"); // just in case ...
+	system("mount -t proc proc /proc >/dev/null 2>&1"); // just in case ...
 
 	my_pid=getpid();
 	sprintf(fileName,"/proc/%i/comm",my_pid);

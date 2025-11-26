@@ -255,7 +255,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 
 		if(!strcmp(action,"copytoclip")) { free(content); 
 
-			sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"",cwd,object,clipboard_folder);
+			sprintf(line,"cp -fPR \"%s/%s\" \"%s/\"",cwd,object,clipboard_folder);
 			system(line);
 			sendListResponse(sock, cwd); return; }
 
@@ -276,7 +276,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 				e=readdir(d);
 				while(e) {
 					 if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
-						sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"", clipboard_folder,e->d_name,cwd);
+						sprintf(line,"cp -fPR \"%s/%s\" \"%s/\"", clipboard_folder,e->d_name,cwd);
 						system(line);
 					 }
 				e=readdir(d);
@@ -284,7 +284,7 @@ void processPOSTfilemanager(int sock, char *request_line) {
 				closedir(d);
 			}
 			else {
-				sprintf(line,"cp -fdR \"%s/%s\" \"%s/\"",clipboard_folder,object,cwd);
+				sprintf(line,"cp -fPR \"%s/%s\" \"%s/\"",clipboard_folder,object,cwd);
 				system(line);
 			}
 			sendListResponse(sock, cwd); return; 
@@ -666,11 +666,10 @@ void sendDetailsResponse(int sock, char *cwd, char *obj) {
 //
 
 void sendListResponse(int sock, char *cwd) {
-	char list[10*B_SIZE], *aux;
-	DIR *d;
-	struct dirent *e;
+	char list[10*B_SIZE], line[B_SIZE], *aux, *aux1;
+	char type;
 	int i;
-	FILE *tmpFile=tmpfile();
+	FILE *p, *tmpFile=tmpfile();
 
 	sprintf(list,"%s<body bgcolor=gray> \
 		       <form name=main method=POST action=/filemanager enctype=text/plain><input type=hidden name=secret value='%s'><input type=hidden name=action value=list><input type=hidden name=object value=> \
@@ -683,7 +682,6 @@ void sendListResponse(int sock, char *cwd) {
 		       <td></td>",html_header,access_secret,cwd,cwd,title);
 
 	fwrite(list,1,strlen(list),tmpFile);
-
 	strcpy(list,"<td align=center valign=top style=\"width:600px\"><details><summary>Execute command line</summary>");
 	aux=list+strlen(list);
 	readCommandLinesFromSettings();
@@ -738,22 +736,23 @@ void sendListResponse(int sock, char *cwd) {
 	strcpy(list,"<td align=center valign=top style=\"width:450px\"><details><summary>CLIPBOARD</summary><p><table width=100% border=0 cellpadding=2>");
 	aux=list+strlen(list);
 	
-	d=opendir(clipboard_folder);
-	e=readdir(d);
+	sprintf(line,"%s \"%s\"", LS_COMMAND_LINE, clipboard_folder);
+	p=popen(line,"r");
+
 	i=0;
-	while(e) {
-		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
-			sprintf(aux,"<tr><td align=center style=\"width:200px\" style=\"vertical-align:middle\"><small><b>%s", e->d_name);
-			if(e->d_type==DT_DIR) strcat(aux,"/"); else if(e->d_type==DT_LNK) strcat(aux," →");
-			aux=aux+strlen(aux);
-			sprintf(aux,"</b></small></td><td align=center style=\"width:200px\"><input type=button value=\"PASTE\" onclick=\"act('pasteclip','%s','');\">   \
-					<input type=button value=\"DELETE\" onclick=\"act('deleteclip','%s','');\"></td></tr>", e->d_name, e->d_name);
-			aux=aux+strlen(aux);
-			i++;
-		}
-		e=readdir(d);
+	while(fgets(line,B_SIZE,p)) {
+		aux1=line+strlen(line)-2; // the last char in the line (excluding CR). It may be one of: */=>@|
+		if(*aux1=='*' || *aux1=='/' || *aux1=='=' || *aux1=='>' || *aux1=='@' || *aux1=='|') {type=*aux1; *aux1=0;}
+		else {type='r';aux1++;*aux1=0;}
+		sprintf(aux,"<tr><td align=center style=\"width:200px\" style=\"vertical-align:middle\"><small><b>%s", line);
+		if(type=='/') strcat(aux,"/"); else if(type=='@') strcat(aux," →");
+		aux=aux+strlen(aux);
+		sprintf(aux,"</b></small></td><td align=center style=\"width:200px\"><input type=button value=\"PASTE\" onclick=\"act('pasteclip','%s','');\">   \
+				<input type=button value=\"DELETE\" onclick=\"act('deleteclip','%s','');\"></td></tr>", line, line);
+		aux=aux+strlen(aux);
+		i++;
 	}
-	closedir(d);
+	pclose(p);
 	if(i>1) {
 		strcpy(aux,"<tr><td colspan=2 align=center><hr><input type=button value=\"PASTE ALL\" onclick=\"act('pasteclipALL','all','');\">  \
 			           <input type=button value=\"DELETE ALL\" onclick=\"act('deleteclipALL','all','');\"></td></tr>");
@@ -763,10 +762,6 @@ void sendListResponse(int sock, char *cwd) {
 
 
 	// Add to the list the current folder listing contents
-	d=opendir(cwd);
-	//printf("Listing folder %s\n",cwd);
-	if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",html_header,cwd,HTML_BODY_FOOTER);
-			           fclose(tmpFile); sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
 	
 	// CD - navigation
 	
@@ -782,77 +777,83 @@ void sendListResponse(int sock, char *cwd) {
 	fwrite(list,1,strlen(list),tmpFile);
 
 
+
+	// LIST THE CURRENT FOLDER'S CONTENT
+
+	// d=opendir(cwd);
+
+	sprintf(line,"%s \"%s\"", LS_COMMAND_LINE, cwd);
+	p=popen(line,"r");
+
+	//printf("Listing folder %s\n",cwd);
+	//if(!d) { sprintf(list,"%s<body bgcolor=yellow><h1>Failed to open directory %s for listing.</h1>%s",html_header,cwd,HTML_BODY_FOOTER);
+	//		           fclose(tmpFile); sendHttpStringResponse(sock, "500 Internal Server Error", "text/html", list); return; }
+
 	int elem=0;  // used to grant unique html IDs
-	do {
-		e=readdir(d);
-		if(!e) break;
-		// use the details tag
-		if(strcmp(e->d_name,"..") && strcmp(e->d_name,".")) {
-			elem++;
-			aux=list;
-			strcpy(aux,"<p><details><summary>    ");
-			// if a folder, permit cd into it
-			aux=aux+strlen(aux);
 
-			if(e->d_type==DT_DIR) sprintf(aux,"<a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>",e->d_name,e->d_name);
-			else if(e->d_type== DT_LNK) {
-				char fullName[B_SIZE], linkTarget[B_SIZE];
-				sprintf(fullName,"%s/%s",cwd,e->d_name);\
-				int l_size=readlink(fullName, linkTarget, B_SIZE);
-				linkTarget[l_size]=0;
-				struct stat prop;
-				chdir(cwd);
-				if(stat(linkTarget,&prop)) sprintf(aux,"<b>%s</b> → <font color=red><b>%s</b></font>", e->d_name,linkTarget);
-				else
-				if(S_ISDIR(prop.st_mode)) sprintf(aux,"<b>%s</b> → <a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>", e->d_name,linkTarget,linkTarget); 
-				else sprintf(aux,"<b>%s</b> → <font color=green><b>%s</b></font>", e->d_name,linkTarget); 
-				
+	while(fgets(line,B_SIZE,p)) {
+		elem++;
+		aux=line+strlen(line)-2; // the last char in the line (excluding CR). It may be one of: */=>@|
+		if(*aux=='*' || *aux=='/' || *aux=='=' || *aux=='>' || *aux=='@' || *aux=='|') {type=*aux; *aux=0;}
+		else {type='r';aux++;*aux=0;}
 
+		aux=list;
+		strcpy(aux,"<p><details><summary>    ");
+		aux=aux+strlen(aux);
 
-			}
-			else sprintf(aux,"<b>%s</b>",e->d_name);
-
-			strcat(aux,"</summary><p><table width=100%% border=0 cellspacing=3><tr>");
-
-			// DETAILS
-			aux=aux+strlen(aux);
-			sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"Properties\" onClick=\"javascript:act('details','%s','');\"></td>", e->d_name);
-
-			//
-			// VIEW-EDIT - view and edit file content (if it's text)
-			aux=aux+strlen(aux);
-			if(e->d_type==DT_REG) sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"View/Edit\" onClick=\"javascript:act('viewedit','%s','');\"></td>",
-					e->d_name);
-			// DOWNLOAD
-			aux=aux+strlen(aux);
-			if(e->d_type==DT_REG) sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"Download\" onClick=\"javascript:act('download','%s','');\"></td>",
-					e->d_name);
-
-			// RENAME or CLONE 
-			aux=aux+strlen(aux);
-			sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>RENAME/CLONE</summary> \
-		       		<p><input id=ren%i type=text value=\"%s\"> \
-				<p><input type=button value=Rename onclick=\"act('rename','%s',document.getElementById('ren%i').value);\"> \
-				<input type=button value=Sym.link onclick=\"act('symlink','%s',document.getElementById('ren%i').value);\"> \
-		       		<input type=button value=Clone onclick=\"act('clone','%s',document.getElementById('ren%i').value);\"></p></details</td>",
-				elem, e->d_name, e->d_name, elem, e->d_name, elem, e->d_name, elem);
-
-			// DELETE 
-			strcat(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>DELETE</summary><p>");
-			aux=aux+strlen(aux);
-			if(e->d_type==DT_DIR) sprintf(aux,"<input type=button value=\"Confirm Remove Folder and Contents\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",e->d_name); 
-			else sprintf(aux,"<input type=button value=\"Confirm Remove File\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",e->d_name); 
-
-			// COPY TO CLIPBOARD
-			aux=aux+strlen(aux);
-			sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",
-					e->d_name);
-			strcat(aux,"</tr></table><hr></p></details>");
-			fwrite(list,1,strlen(list),tmpFile);
-			}
+		if(type=='/') sprintf(aux,"<a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>",line,line);
+		else
+		if(type=='@') {
+			char fullName[2*B_SIZE], linkTarget[B_SIZE];
+			sprintf(fullName,"%s/%s",cwd,line);
+			int l_size=readlink(fullName, linkTarget, B_SIZE);
+			linkTarget[l_size]=0;
+			struct stat prop;
+			chdir(cwd);
+			if(stat(linkTarget,&prop)) sprintf(aux,"<b>%s</b> → <font color=red><b>%s</b></font>", line,linkTarget);
+			else
+			if(S_ISDIR(prop.st_mode)) sprintf(aux,"<b>%s</b> → <a href=\"javascript:act('cd','%s','');\"><b>%s/</b></a>", line,linkTarget,linkTarget); 
+			else sprintf(aux,"<b>%s</b> → <font color=green><b>%s</b></font>", line,linkTarget); 
 		}
-	while(e);
-	closedir(d);
+		else sprintf(aux,"<b>%s</b>",line);
+
+		strcat(aux,"</summary><p><table width=100%% border=0 cellspacing=3><tr>");
+
+		// DETAILS
+		aux=aux+strlen(aux);
+		sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"Properties\" onClick=\"javascript:act('details','%s','');\"></td>", line);
+
+		// VIEW-EDIT - view and edit file content (if it's text)
+		aux=aux+strlen(aux);
+		if(type=='r' || type=='*') sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"View/Edit\" onClick=\"javascript:act('viewedit','%s','');\"></td>",line);
+
+		// DOWNLOAD
+		aux=aux+strlen(aux);
+		if(type=='r' || type=='*') sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"Download\" onClick=\"javascript:act('download','%s','');\"></td>",line);
+
+		// RENAME or CLONE 
+		aux=aux+strlen(aux);
+		sprintf(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>RENAME/CLONE</summary> \
+	       		<p><input id=ren%i type=text value=\"%s\"> \
+			<p><input type=button value=Rename onclick=\"act('rename','%s',document.getElementById('ren%i').value);\"> \
+			<input type=button value=Sym.link onclick=\"act('symlink','%s',document.getElementById('ren%i').value);\"> \
+	       		<input type=button value=Clone onclick=\"act('clone','%s',document.getElementById('ren%i').value);\"></p></details</td>",
+			elem, line, line, elem, line, elem, line, elem);
+
+		// DELETE 
+		strcat(aux,"<td align=center valign=top style=\"width:250px\"><details><summary>DELETE</summary><p>");
+		aux=aux+strlen(aux);
+		if(type=='/') sprintf(aux,"<input type=button value=\"Confirm Remove Folder and Contents\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",line); 
+		else sprintf(aux,"<input type=button value=\"Confirm Remove File\" onClick=\"javascript:act('rm','%s','');\"></p></details></td>",line); 
+
+		// COPY TO CLIPBOARD
+		aux=aux+strlen(aux);
+		sprintf(aux,"<td align=center valign=top style=\"width:200px\"><input type=button value=\"COPY to CLIPBOARD\" onClick=\"javascript:act('copytoclip','%s','');\"></td>",line);
+		strcat(aux,"</tr></table><hr></p></details>");
+
+		fwrite(list,1,strlen(list),tmpFile);
+		}
+	pclose(p);
 	strcpy(list,HTML_BODY_FOOTER);
 	fwrite(list,1,strlen(list),tmpFile);
 	sendHttpFileContent(sock, tmpFile, "200 Ok", "text/html");

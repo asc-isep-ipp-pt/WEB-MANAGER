@@ -1,6 +1,8 @@
 #ifndef ___HTTP_FILEMANAGER_H
 #define ___HTTP_FILEMANAGER_H
 
+#define LS_COMMAND_LINE "ls -FAH1"
+
 void processGETfilemanager(int sock, char *request_line);
 void processPOSTfilemanager(int sock, char *request_line);
 
